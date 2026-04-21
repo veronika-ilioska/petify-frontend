@@ -103,7 +103,7 @@ export async function login(payload: LoginRequest, options?: { signal?: AbortSig
         firstName: data.firstName,
         lastName: data.lastName,
         userType: data.userType,
-        verified: false // Will be updated by ProfileView
+        verified: data.verified || false  // Use verified status from API response
       },
       message: data.message
     }
@@ -131,7 +131,7 @@ export async function signup(payload: SignupRequest, options?: { signal?: AbortS
         firstName: data.firstName,
         lastName: data.lastName,
         userType: data.userType,
-        verified: false // Will be updated by ProfileView
+        verified: data.verified || false  // Use verified status from API response
       },
       message: data.message
     }

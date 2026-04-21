@@ -16,7 +16,9 @@
             <div class="profile-info">
               <div style="display: flex; align-items: center; gap: 12px;">
                 <h1 class="profile-name">{{ auth.user?.firstName }} {{ auth.user?.lastName }}</h1>
-                <span v-if="auth.user?.verified" class="verified-badge">✓ Verified</span>
+                <span v-if="auth.user?.verified" class="verified-badge">
+                  <img src="@/img/star.png" alt="verified" class="badge-star" /> Top 10
+                </span>
               </div>
               <p class="profile-username">@{{ auth.user?.username }}</p>
               <p class="profile-email">
@@ -1027,15 +1029,32 @@ watch(activeTab, (newTab) => {
 }
 
 .verified-badge {
-  background: #10b981;
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
   color: white;
-  padding: 4px 12px;
+  padding: 6px 14px;
   border-radius: 20px;
   font-size: 0.85rem;
   font-weight: 600;
   white-space: nowrap;
-  font-weight: 600;
   letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+.badge-star {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+
+.badge-star {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
 }
 
 /* Main Content */

@@ -14,6 +14,7 @@ export interface UserProfile {
   email: string
   firstName: string
   lastName: string
+  verified?: boolean
 }
 
 export interface Pet {
