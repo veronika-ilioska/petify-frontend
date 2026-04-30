@@ -93,6 +93,17 @@
                 <i class="bi bi-plus-circle-fill"></i> Create Listing
               </button>
             </li>
+            <li v-if="isOwner" class="nav-item" role="presentation">
+              <button
+                class="nav-link"
+                :class="{ active: activeTab === 'appointments' }"
+                @click="activeTab = 'appointments'"
+                type="button"
+                role="tab"
+              >
+                <i class="bi bi-calendar-check-fill"></i> Appointments
+              </button>
+            </li>
             <li v-if="isAdmin" class="nav-item" role="presentation">
               <button
                 class="nav-link"
@@ -212,6 +223,13 @@
                     class="btn btn-primary btn-sm w-100"
                   >
                     Create Listing for {{ pet.name }}
+                  </button>
+                  <button
+                    v-if="isOwner"
+                    @click="selectPetForAppointment(pet)"
+                    class="btn btn-outline-secondary btn-sm w-100"
+                  >
+                    Schedule Appointment for {{ pet.name }}
                   </button>
                 </div>
               </div>
@@ -438,6 +456,123 @@
             </div>
           </div>
 
+          <!-- Create Appointment Tab -->
+          <div v-if="activeTab === 'appointments'" class="tab-content-section">
+            <h2 class="section-title">Create Appointment</h2>
+            <div v-if="appointmentsError" class="alert alert-danger">
+              {{ appointmentsError }}
+            </div>
+            <div v-if="isAppointmentsLoading" class="alert alert-info">Loading appointments...</div>
+            <OwnerAppointmentsCalendar
+              v-if="!isAppointmentsLoading"
+              :appointments="appointments"
+              :selected-date="selectedAppointmentDate"
+              @select="handleCalendarSelect"
+            />
+            <div class="appointments-day-section">
+              <h3 class="appointments-day-title">
+                Appointments for {{ selectedAppointmentDate || 'Select a day' }}
+              </h3>
+              <div v-if="selectedDayAppointments.length === 0" class="empty-state appointments-empty">
+                <p>No appointments scheduled for this day.</p>
+              </div>
+              <div v-else class="appointments-list">
+                <div v-for="appt in selectedDayAppointments" :key="appt.appointmentId" class="appointment-card">
+                  <div class="appointment-header">
+                    <div class="appointment-title">
+                      {{ appt.petName || 'Pet' }}
+                      <span v-if="appt.petSpecies">({{ appt.petSpecies }})</span>
+                    </div>
+                    <span class="badge" :class="getStatusBadgeClass(appt.status)">
+                      {{ appt.status }}
+                    </span>
+                  </div>
+                  <div class="appointment-meta">
+                    <div class="appointment-time">{{ formatDateTime(appt.dateTime) }}</div>
+                    <div class="appointment-clinic">
+                      {{ appt.clinicName || 'Clinic' }} - {{ appt.clinicCity || '' }} {{ appt.clinicAddress || '' }}
+                    </div>
+                  </div>
+                  <div v-if="appt.notes" class="appointment-notes">{{ appt.notes }}</div>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="pets.length === 0" class="empty-state">
+              <p>You need to have at least one pet to create an appointment.</p>
+            </div>
+            <div v-else class="form-card">
+              <form @submit.prevent="submitAppointment">
+                <div class="form-group">
+                  <label for="appointmentPet" class="form-label">Select Pet *</label>
+                  <select
+                    v-model.number="newAppointment.animalId"
+                    id="appointmentPet"
+                    class="form-select"
+                    required
+                  >
+                    <option value="">Choose a pet...</option>
+                    <option v-for="pet in pets" :key="pet.animalId" :value="pet.animalId">
+                      {{ pet.name }} ({{ pet.species }})
+                    </option>
+                  </select>
+                </div>
+
+                <div class="form-group">
+                  <label for="appointmentClinic" class="form-label">Clinic *</label>
+                  <select
+                    v-model.number="newAppointment.clinicId"
+                    id="appointmentClinic"
+                    class="form-select"
+                    required
+                  >
+                    <option value="">Choose a clinic...</option>
+                    <option v-for="clinic in clinics" :key="clinic.clinicId" :value="clinic.clinicId">
+                      {{ clinic.name }} - {{ clinic.city }}, {{ clinic.address }}
+                    </option>
+                  </select>
+                  <small v-if="clinicsError" class="text-danger">{{ clinicsError }}</small>
+                </div>
+
+                <div class="form-group">
+                  <label for="appointmentDate" class="form-label">Date & Time *</label>
+                  <input
+                    v-model="newAppointment.dateTime"
+                    type="datetime-local"
+                    id="appointmentDate"
+                    class="form-control"
+                    required
+                  />
+                </div>
+
+                <div class="form-group">
+                  <label for="appointmentNotes" class="form-label">Notes</label>
+                  <textarea
+                    v-model="newAppointment.notes"
+                    id="appointmentNotes"
+                    class="form-control"
+                    rows="4"
+                    placeholder="Add notes for the clinic..."
+                  ></textarea>
+                </div>
+
+                <div v-if="appointmentError" class="alert alert-danger">
+                  {{ appointmentError }}
+                </div>
+
+                <div class="form-actions">
+                  <button type="submit" class="btn btn-primary" :disabled="isAppointmentSubmitting">
+                    <span v-if="isAppointmentSubmitting" class="spinner-border spinner-border-sm me-2"></span>
+                    {{ isAppointmentSubmitting ? 'Creating...' : 'Create Appointment' }}
+                  </button>
+                  <button type="button" @click="resetAppointmentForm" class="btn btn-outline-secondary" :disabled="isAppointmentSubmitting">
+                    Reset
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
           <!-- Admin Panel Tab -->
           <div v-if="activeTab === 'admin' && isAdmin" class="tab-content-section">
             <h2 class="section-title">Admin Panel</h2>
@@ -551,6 +686,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import OwnerAppointmentsCalendar from '../components/OwnerAppointmentsCalendar.vue'
 import {
   getUserListings,
   getUserPets,
@@ -560,6 +696,9 @@ import {
   updateListingStatus,
   getPet,
   loadUserVerificationStatus,
+  createAppointment,
+  getClinics,
+  getOwnerAppointments,
 } from '../api/profile'
 import { getFavoritedListings, removeFavorite as removeFavoriteAPI } from '../api/favorites'
 import { getAllUsers, getAllListings } from '../api/admin'
@@ -567,16 +706,24 @@ import { getAllUsers, getAllListings } from '../api/admin'
 const router = useRouter()
 const auth = useAuthStore()
 
-const activeTab = ref<'listings' | 'pets' | 'add-pet' | 'create-listing' | 'favorites' | 'admin'>('listings')
+const activeTab = ref<'listings' | 'pets' | 'add-pet' | 'create-listing' | 'favorites' | 'admin' | 'appointments'>('listings')
 const listings = ref<any[]>([])
 const pets = ref<any[]>([])
 const favorites = ref<any[]>([])
 const adminUsers = ref<any[]>([])
 const adminListings = ref<any[]>([])
+const clinics = ref<any[]>([])
+const appointments = ref<any[]>([])
+const selectedAppointmentDate = ref('')
+const appointmentsError = ref('')
 const isLoading = ref(false)
 const isSubmitting = ref(false)
 const isPetSubmitting = ref(false)
+const isAppointmentSubmitting = ref(false)
+const isAppointmentsLoading = ref(false)
 const errorMessage = ref('')
+const appointmentError = ref('')
+const clinicsError = ref('')
 
 const adminStats = ref({
   totalUsers: 0,
@@ -600,6 +747,13 @@ const newPet = ref({
   species: '',
   breed: '',
   locatedName: '',
+})
+
+const newAppointment = ref({
+  clinicId: null as number | null,
+  animalId: null as number | null,
+  dateTime: '',
+  notes: '',
 })
 
 const isOwner = computed(() => {
@@ -650,11 +804,26 @@ function formatDate(dateString: string): string {
   })
 }
 
+function formatDateTime(dateString: string): string {
+  const date = new Date(dateString)
+  return date.toLocaleString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 function getStatusBadgeClass(status: string): string {
   switch (status) {
     case 'ACTIVE':
+    case 'CONFIRMED':
+    case 'DONE':
       return 'bg-success'
     case 'INACTIVE':
+    case 'CANCELLED':
+    case 'NO_SHOW':
       return 'bg-secondary'
     case 'SOLD':
       return 'bg-danger'
@@ -700,6 +869,49 @@ async function loadPets() {
   } finally {
     isLoading.value = false
   }
+}
+
+async function loadClinics() {
+  try {
+    clinics.value = await getClinics()
+    clinicsError.value = ''
+  } catch (error) {
+    clinics.value = []
+    clinicsError.value = error instanceof Error ? error.message : 'Failed to load clinics'
+  }
+}
+
+async function loadAppointments() {
+  if (!auth.user?.userId || !isOwner.value) return
+  try {
+    isAppointmentsLoading.value = true
+    appointments.value = await getOwnerAppointments(auth.user.userId)
+    if (!selectedAppointmentDate.value) {
+      selectedAppointmentDate.value = toDateKey(new Date())
+    }
+    appointmentsError.value = ''
+  } catch (error) {
+    appointments.value = []
+    appointmentsError.value = error instanceof Error ? error.message : 'Failed to load appointments'
+  } finally {
+    isAppointmentsLoading.value = false
+  }
+}
+
+function toDateKey(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const selectedDayAppointments = computed(() => {
+  if (!selectedAppointmentDate.value) return []
+  return appointments.value.filter((appt) => toDateKey(new Date(appt.dateTime)) === selectedAppointmentDate.value)
+})
+
+function handleCalendarSelect(dateKey: string) {
+  selectedAppointmentDate.value = dateKey
 }
 
 async function submitListing() {
@@ -761,11 +973,40 @@ function selectPetForListing(pet: any) {
   activeTab.value = 'create-listing'
 }
 
+function selectPetForAppointment(pet: any) {
+  newAppointment.value.animalId = pet.animalId
+  activeTab.value = 'appointments'
+}
+
 function resetForm() {
   newListing.value = {
     animalId: null,
     description: '',
     price: null,
+  }
+  errorMessage.value = ''
+}
+
+function resetAppointmentForm() {
+  newAppointment.value = {
+    clinicId: null,
+    animalId: null,
+    dateTime: '',
+    notes: '',
+  }
+  appointmentError.value = ''
+}
+
+function resetPetForm() {
+  newPet.value = {
+    name: '',
+    sex: '',
+    dateOfBirth: '',
+    photoUrl: '',
+    type: 'PET',
+    species: '',
+    breed: '',
+    locatedName: '',
   }
   errorMessage.value = ''
 }
@@ -807,18 +1048,31 @@ async function submitPet() {
   }
 }
 
-function resetPetForm() {
-  newPet.value = {
-    name: '',
-    sex: '',
-    dateOfBirth: '',
-    photoUrl: '',
-    type: 'PET',
-    species: '',
-    breed: '',
-    locatedName: '',
+async function submitAppointment() {
+  if (!auth.user?.userId || !newAppointment.value.animalId || !newAppointment.value.clinicId || !newAppointment.value.dateTime) {
+    appointmentError.value = 'Please fill in clinic, pet, and date/time'
+    return
   }
-  errorMessage.value = ''
+
+  try {
+    isAppointmentSubmitting.value = true
+    appointmentError.value = ''
+
+    await createAppointment(auth.user.userId, {
+      clinicId: newAppointment.value.clinicId,
+      animalId: newAppointment.value.animalId,
+      dateTime: newAppointment.value.dateTime,
+      notes: newAppointment.value.notes || undefined,
+    })
+
+    await loadAppointments()
+    resetAppointmentForm()
+    activeTab.value = 'pets'
+  } catch (error) {
+    appointmentError.value = error instanceof Error ? error.message : 'Failed to create appointment'
+  } finally {
+    isAppointmentSubmitting.value = false
+  }
 }
 
 async function loadFavorites() {
@@ -946,6 +1200,8 @@ onMounted(() => {
   loadPets()
   loadFavorites()
   loadUserVerification()
+  loadClinics()
+  loadAppointments()
 
   if (isAdmin.value) {
     loadAdminData()
@@ -1479,40 +1735,62 @@ watch(activeTab, (newTab) => {
   overflow: hidden;
 }
 
-.favorite-image-wrapper {
-  position: relative;
-  width: 100%;
-  height: 200px;
-  background: linear-gradient(135deg, #f5f7fa 0%, #f0f3f8 100%);
-  overflow: hidden;
+.appointments-day-section {
+  margin: 24px 0 32px;
+}
+
+.appointments-day-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+  color: #1a202c;
+}
+
+.appointments-list {
+  display: grid;
+  gap: 12px;
+}
+
+.appointment-card {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.appointment-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-}
-
-.favorite-image {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.favorite-content {
-  padding: 20px;
-  display: flex;
   justify-content: space-between;
-  align-items: flex-start;
   gap: 12px;
-  border-bottom: 1px solid #e2e8f0;
 }
 
-.favorite-content .listing-title {
-  flex: 1;
-  margin: 0;
-  font-size: 1.2rem;
+.appointment-title {
+  font-weight: 700;
+  color: #1a202c;
 }
 
-.favorite-content .badge {
-  flex-shrink: 0;
+.appointment-meta {
+  color: #4a5568;
+  font-size: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.appointment-notes {
+  font-size: 0.9rem;
+  color: #2d3748;
+  background: #f7fafc;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.appointments-empty {
+  padding: 24px;
 }
 
 /* Badges */

@@ -29,6 +29,28 @@ export interface Pet {
   locatedName?: string
 }
 
+export interface VetClinic {
+  clinicId: number
+  name: string
+  city: string
+  address: string
+}
+
+export interface OwnerAppointment {
+  appointmentId: number
+  clinicId: number
+  clinicName?: string
+  clinicCity?: string
+  clinicAddress?: string
+  animalId: number
+  petName?: string
+  petSpecies?: string
+  petPhotoUrl?: string
+  status: string
+  dateTime: string
+  notes?: string
+}
+
 export async function getUserProfile(userId: number): Promise<UserProfile> {
   const url = joinUrl(getBaseUrl(), `/api/users/${userId}`)
   const response = await fetch(url, {
@@ -225,4 +247,73 @@ export async function loadUserVerificationStatus(userId: number): Promise<boolea
     console.error('Failed to load user verification status:', error)
     return false
   }
+}
+
+export async function createAppointment(
+  userId: number,
+  data: {
+    clinicId: number
+    animalId: number
+    dateTime: string
+    notes?: string
+  }
+): Promise<any> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments`)
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || `Failed to create appointment: ${response.statusText}`)
+  }
+
+  return await response.json()
+}
+
+export async function getClinics(): Promise<VetClinic[]> {
+  const url = joinUrl(getBaseUrl(), `/api/clinics`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  const contentType = response.headers.get('content-type') || ''
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Failed to fetch clinics: ${response.status} ${response.statusText}. ${text.slice(0, 200)}`)
+  }
+
+  if (!contentType.includes('application/json')) {
+    const text = await response.text()
+    throw new Error(`Clinics API returned non-JSON. Check VITE_API_BASE_URL/backend. ${text.slice(0, 200)}`)
+  }
+
+  return await response.json()
+}
+
+export async function getOwnerAppointments(userId: number): Promise<OwnerAppointment[]> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments/my`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Failed to fetch appointments: ${response.status} ${response.statusText}. ${text.slice(0, 200)}`)
+  }
+
+  return await response.json()
 }
