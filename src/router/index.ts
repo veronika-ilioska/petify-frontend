@@ -5,7 +5,8 @@ import LoginView from '../views/LoginView.vue'
 import SignupView from '../views/SignupView.vue'
 import ProfileView from '../views/ProfileView.vue'
 import OwnerProfileView from '../views/OwnerProfileView.vue'
-import AdminReviewsView from '@/views/AdminReviewsView.vue'
+import AdminModerationView from '@/views/AdminModerationView.vue'
+import AdminClientsView from '@/views/AdminClientsView.vue'
 import ClinicDashboardView from '@/views/ClinicDashboardView.vue'
 
 const router = createRouter({
@@ -52,9 +53,14 @@ const router = createRouter({
       component: ListingDetailsView,
     },
     {
-      path: '/admin/reviews',
-      name: 'admin-reviews',
-      component: AdminReviewsView,
+      path: '/admin/clinics',
+      name: 'admin-clinics',
+      component: AdminModerationView,
+    },
+    {
+      path: '/admin/clients',
+      name: 'admin-clients',
+      component: AdminClientsView,
     },
   ],
 })

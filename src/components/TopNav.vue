@@ -29,8 +29,11 @@
                 Clinic Dashboard
               </RouterLink>
               <template v-if="auth.user?.userType === 'ADMIN'">
-                <RouterLink class="btn btn-admin" to="/admin/reviews">
-                  <i class="bi bi-eye"></i> Reviews
+                <RouterLink class="btn btn-admin" to="/admin/clinics">
+                  <i class="bi bi-hospital"></i> Clinics
+                </RouterLink>
+                <RouterLink class="btn btn-admin" to="/admin/clients">
+                  <i class="bi bi-people"></i> Clients
                 </RouterLink>
               </template>
               <RouterLink class="btn btn-outline-secondary" to="/profile">

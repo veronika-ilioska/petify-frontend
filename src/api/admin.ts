@@ -72,3 +72,74 @@ export async function deleteUser(userId: number, targetUserId: number): Promise<
     throw new Error('Failed to delete user')
   }
 }
+
+export async function getClinicApplications(userId: number): Promise<any[]> {
+  const url = joinUrl(getBaseUrl(), '/api/admin/clinic-applications')
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch clinic applications')
+  }
+
+  return await response.json()
+}
+
+export async function getClinicsAdmin(userId: number): Promise<any[]> {
+  const url = joinUrl(getBaseUrl(), '/api/clinics')
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch clinics')
+  }
+
+  return await response.json()
+}
+
+export async function approveClinicApplication(userId: number, applicationId: number): Promise<any> {
+  const url = joinUrl(getBaseUrl(), `/api/admin/clinic-applications/${applicationId}/approve`)
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to approve clinic application')
+  }
+
+  return await response.json()
+}
+
+export async function denyClinicApplication(userId: number, applicationId: number, denialReason: string): Promise<any> {
+  const url = joinUrl(getBaseUrl(), `/api/admin/clinic-applications/${applicationId}/deny`)
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+    body: JSON.stringify({ denialReason }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to deny clinic application')
+  }
+
+  return await response.json()
+}

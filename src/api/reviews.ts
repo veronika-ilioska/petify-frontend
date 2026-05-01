@@ -56,7 +56,41 @@ export async function getReviewsByOwner(targetUserId: number): Promise<Review[]>
   })
 
   if (!response.ok) {
-    throw new Error('Failed to fetch reviews')
+    const text = await response.text()
+    throw new Error(`Failed to fetch reviews: ${response.status} ${response.statusText}. ${text.slice(0, 160)}`)
+  }
+
+  return await readJsonResponse<Review[]>(response, 'reviews')
+}
+
+export async function getReviewsLeftByUser(reviewerId: number): Promise<Review[]> {
+  const url = joinUrl(getBaseUrl(), `/api/reviews/by/${reviewerId}`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Failed to fetch reviews left by user: ${response.status} ${response.statusText}. ${text.slice(0, 160)}`)
+  }
+
+  return await readJsonResponse<Review[]>(response, 'reviews left by user')
+}
+
+export async function getReviewsByClinic(clinicId: number): Promise<Review[]> {
+  const url = joinUrl(getBaseUrl(), `/api/reviews/clinics/${clinicId}`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    throw new Error('Failed to fetch clinic reviews')
   }
 
   return await response.json()
@@ -152,4 +186,15 @@ export async function deleteReview(reviewId: number, userId: number): Promise<vo
     const error = await response.json()
     throw new Error(error.error || 'Failed to delete review')
   }
+}
+
+async function readJsonResponse<T>(response: Response, label: string): Promise<T> {
+  const contentType = response.headers.get('content-type') || ''
+  const text = await response.text()
+
+  if (!contentType.includes('application/json')) {
+    throw new Error(`Expected JSON for ${label}, but backend returned non-JSON. ${text.slice(0, 160)}`)
+  }
+
+  return JSON.parse(text) as T
 }
