@@ -455,6 +455,36 @@ export async function getMyClinicAppointments(userId: number, date: string): Pro
   return await response.json()
 }
 
+export async function markMyClinicAppointmentNoShow(userId: number, appointmentId: number): Promise<ClinicAppointment> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments/my-clinic/${appointmentId}/no-show`)
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    let apiError = ''
+    try {
+      const error = JSON.parse(text)
+      apiError = error.error || ''
+    } catch {
+      apiError = ''
+    }
+
+    if (apiError) {
+      throw new Error(apiError)
+    }
+
+    throw new Error(`Failed to mark appointment as no-show: ${response.status} ${response.statusText}. ${text.slice(0, 200)}`)
+  }
+
+  return await response.json()
+}
+
 export async function getMyClinicAvailableSlots(userId: number, date: string): Promise<AppointmentSlot[]> {
   const url = joinUrl(getBaseUrl(), `/api/appointments/my-clinic/available-slots?date=${encodeURIComponent(date)}`)
   const response = await fetch(url, {

@@ -8,7 +8,16 @@
           <p v-if="clinic" class="clinic-subtitle">{{ clinic.name }} - {{ clinic.city }}, {{ clinic.address }}</p>
         </div>
         <div class="toolbar">
-          <input v-model="selectedDate" type="date" class="form-control date-input" :min="todayDate" />
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="goToPreviousDay">
+            Previous day
+          </button>
+          <input v-model="selectedDate" type="date" class="form-control date-input" />
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="goToToday">
+            Today
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" type="button" @click="goToNextDay">
+            Next day
+          </button>
         </div>
       </div>
     </section>
@@ -106,6 +115,15 @@
                     {{ appointment.petSpecies || 'Species unknown' }} with {{ appointment.ownerName || 'owner' }}
                   </div>
                   <div v-if="appointment.notes" class="appointment-notes">{{ appointment.notes }}</div>
+                  <button
+                    v-if="canMarkNoShow(appointment)"
+                    type="button"
+                    class="btn btn-sm btn-outline-danger appointment-action"
+                    :disabled="updatingAppointmentId === appointment.appointmentId"
+                    @click="markNoShow(appointment)"
+                  >
+                    {{ updatingAppointmentId === appointment.appointmentId ? 'Updating...' : 'Mark no-show' }}
+                  </button>
                 </div>
                 <span class="badge" :class="getStatusClass(appointment.status)">{{ appointment.status }}</span>
               </article>
@@ -128,6 +146,7 @@ import {
   getMyClinicAvailableSlots,
   getMyClinicUnavailableSlots,
   getMyNotifications,
+  markMyClinicAppointmentNoShow,
   type AppNotification,
   type AppointmentSlot,
   type ClinicAppointment,
@@ -155,11 +174,11 @@ const unavailableSlots = ref<ClinicUnavailableSlot[]>([])
 const appointments = ref<ClinicAppointment[]>([])
 const notifications = ref<AppNotification[]>([])
 const isLoading = ref(false)
+const updatingAppointmentId = ref<number | null>(null)
 const accessError = ref('')
 const scheduleError = ref('')
 const notificationsError = ref('')
 
-const todayDate = computed(() => toDateKey(new Date()))
 const canUseDashboard = computed(() => auth.isAuthenticated && auth.user?.userType === 'CLINIC')
 
 const appointmentsByDateTime = computed(() => {
@@ -301,6 +320,28 @@ async function unblockSlot(slotId: number) {
   }
 }
 
+function canMarkNoShow(appointment: ClinicAppointment): boolean {
+  return ['CONFIRMED', 'DONE'].includes(appointment.status) && new Date(appointment.dateTime).getTime() <= Date.now()
+}
+
+async function markNoShow(appointment: ClinicAppointment) {
+  if (!auth.user?.userId) return
+  if (!window.confirm('Mark this appointment as no-show?')) return
+
+  try {
+    updatingAppointmentId.value = appointment.appointmentId
+    scheduleError.value = ''
+    const updated = await markMyClinicAppointmentNoShow(auth.user.userId, appointment.appointmentId)
+    appointments.value = appointments.value.map((item) =>
+      item.appointmentId === updated.appointmentId ? updated : item
+    )
+  } catch (error) {
+    scheduleError.value = error instanceof Error ? error.message : 'Failed to mark appointment as no-show'
+  } finally {
+    updatingAppointmentId.value = null
+  }
+}
+
 function getStatusClass(status: string): string {
   if (status === 'CONFIRMED' || status === 'DONE') return 'bg-success'
   if (status === 'CANCELLED' || status === 'NO_SHOW') return 'bg-secondary'
@@ -316,6 +357,24 @@ function toDateKey(date: Date): string {
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
   return `${year}-${month}-${day}`
+}
+
+function shiftSelectedDate(days: number) {
+  const date = new Date(`${selectedDate.value}T00:00:00`)
+  date.setDate(date.getDate() + days)
+  selectedDate.value = toDateKey(date)
+}
+
+function goToPreviousDay() {
+  shiftSelectedDate(-1)
+}
+
+function goToNextDay() {
+  shiftSelectedDate(1)
+}
+
+function goToToday() {
+  selectedDate.value = toDateKey(new Date())
 }
 
 function formatDateTime(value: string): string {
@@ -615,6 +674,10 @@ watch(selectedDate, () => {
   background: #f7fafc;
   padding: 8px;
   border-radius: 6px;
+}
+
+.appointment-action {
+  margin-top: 10px;
 }
 
 .badge {
