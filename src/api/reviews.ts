@@ -16,6 +16,7 @@ export interface Review {
   rating: number
   comment: string
   createdAt: string
+  updatedAt?: string
 }
 
 export async function createReview(
@@ -60,6 +61,83 @@ export async function getReviewsByOwner(targetUserId: number): Promise<Review[]>
 
   return await response.json()
 }
+
+export async function createClinicReview(
+  clinicId: number,
+  userId: number,
+  rating: number,
+  comment: string
+): Promise<Review> {
+  const url = joinUrl(getBaseUrl(), `/api/reviews/clinics/${clinicId}`)
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+    body: JSON.stringify({
+      rating,
+      comment,
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to create clinic review')
+  }
+
+  return await response.json()
+}
+
+export async function getMyClinicReview(clinicId: number, userId: number): Promise<Review | null> {
+  const url = joinUrl(getBaseUrl(), `/api/reviews/clinics/${clinicId}/mine`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+  })
+
+  if (response.status === 204) {
+    return null
+  }
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to fetch clinic review')
+  }
+
+  return await response.json()
+}
+
+export async function updateReview(
+  reviewId: number,
+  userId: number,
+  rating: number,
+  comment: string
+): Promise<Review> {
+  const url = joinUrl(getBaseUrl(), `/api/reviews/${reviewId}`)
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+    body: JSON.stringify({
+      rating,
+      comment,
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || 'Failed to update review')
+  }
+
+  return await response.json()
+}
+
 export async function deleteReview(reviewId: number, userId: number): Promise<void> {
   const url = joinUrl(getBaseUrl(), `/api/reviews/${reviewId}`)
   const response = await fetch(url, {

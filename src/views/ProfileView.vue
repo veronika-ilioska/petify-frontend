@@ -497,6 +497,64 @@
                     </div>
                   </div>
                   <div v-if="appt.notes" class="appointment-notes">{{ appt.notes }}</div>
+                  <div v-if="appt.status === 'DONE'" class="clinic-review-section">
+                    <div v-if="getClinicReview(appt.clinicId) && activeClinicReviewAppointmentId !== appt.appointmentId" class="clinic-review-summary">
+                      <div>
+                        <div class="clinic-review-stars">
+                          <span v-for="i in 5" :key="i" :class="{ active: i <= (getClinicReview(appt.clinicId)?.rating || 0) }">★</span>
+                        </div>
+                        <p class="clinic-review-comment">{{ getClinicReview(appt.clinicId)?.comment || 'No comment' }}</p>
+                      </div>
+                      <div class="clinic-review-actions">
+                        <button type="button" class="btn btn-sm btn-outline-primary" @click="startClinicReview(appt)">
+                          Edit review
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-danger" @click="deleteClinicReview(appt)">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+
+                    <button
+                      v-else-if="activeClinicReviewAppointmentId !== appt.appointmentId"
+                      type="button"
+                      class="btn btn-sm btn-outline-primary"
+                      @click="startClinicReview(appt)"
+                    >
+                      Leave clinic review
+                    </button>
+
+                    <form v-else class="clinic-review-form" @submit.prevent="submitClinicReview(appt)">
+                      <div class="clinic-review-stars editable">
+                        <button
+                          v-for="i in 5"
+                          :key="i"
+                          type="button"
+                          :class="{ active: i <= clinicReviewForm.rating }"
+                          @click="clinicReviewForm.rating = i"
+                        >
+                          ★
+                        </button>
+                      </div>
+                      <textarea
+                        v-model="clinicReviewForm.comment"
+                        class="form-control"
+                        rows="3"
+                        placeholder="Share how the clinic visit went..."
+                      ></textarea>
+                      <div v-if="clinicReviewError" class="alert alert-danger">
+                        {{ clinicReviewError }}
+                      </div>
+                      <div class="clinic-review-actions">
+                        <button type="submit" class="btn btn-sm btn-primary">
+                          {{ getClinicReview(appt.clinicId) ? 'Save review' : 'Submit review' }}
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @click="cancelClinicReview">
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               </div>
             </div>
@@ -728,6 +786,13 @@ import {
 } from '../api/profile'
 import { getFavoritedListings, removeFavorite as removeFavoriteAPI } from '../api/favorites'
 import { getAllUsers, getAllListings } from '../api/admin'
+import {
+  createClinicReview,
+  deleteReview as deleteReviewAPI,
+  getMyClinicReview,
+  updateReview as updateReviewAPI,
+  type Review,
+} from '../api/reviews'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -741,8 +806,10 @@ const adminListings = ref<any[]>([])
 const clinics = ref<any[]>([])
 const availableSlots = ref<any[]>([])
 const appointments = ref<any[]>([])
+const clinicReviews = ref<Record<number, Review | null>>({})
 const selectedAppointmentDate = ref('')
 const appointmentDate = ref('')
+const activeClinicReviewAppointmentId = ref<number | null>(null)
 const appointmentsError = ref('')
 const isLoading = ref(false)
 const isSubmitting = ref(false)
@@ -754,6 +821,7 @@ const errorMessage = ref('')
 const appointmentError = ref('')
 const clinicsError = ref('')
 const slotsError = ref('')
+const clinicReviewError = ref('')
 const showAddPetForm = ref(false)
 const addPetPanel = ref<HTMLElement | null>(null)
 const petPhotoFile = ref<File | null>(null)
@@ -787,6 +855,11 @@ const newAppointment = ref({
   animalId: null as number | null,
   dateTime: '',
   notes: '',
+})
+
+const clinicReviewForm = ref({
+  rating: 0,
+  comment: '',
 })
 
 const isOwner = computed(() => {
@@ -939,6 +1012,29 @@ async function loadAppointments() {
   } finally {
     isAppointmentsLoading.value = false
   }
+
+  await loadClinicReviewsForDoneAppointments()
+}
+
+async function loadClinicReviewsForDoneAppointments() {
+  if (!auth.user?.userId) return
+
+  const clinicIds = Array.from(new Set(
+    appointments.value
+      .filter((appt) => appt.status === 'DONE' && appt.clinicId)
+      .map((appt) => Number(appt.clinicId))
+  ))
+
+  const nextReviews: Record<number, Review | null> = {}
+  await Promise.all(clinicIds.map(async (clinicId) => {
+    try {
+      nextReviews[clinicId] = await getMyClinicReview(clinicId, auth.user!.userId)
+    } catch (error) {
+      console.error(`Failed to load clinic review for clinic ${clinicId}:`, error)
+      nextReviews[clinicId] = null
+    }
+  }))
+  clinicReviews.value = nextReviews
 }
 
 async function loadAvailableSlots() {
@@ -975,6 +1071,78 @@ const selectedDayAppointments = computed(() => {
 
 function handleCalendarSelect(dateKey: string) {
   selectedAppointmentDate.value = dateKey
+}
+
+function getClinicReview(clinicId: number): Review | null {
+  return clinicReviews.value[clinicId] || null
+}
+
+function startClinicReview(appt: any) {
+  const existingReview = getClinicReview(appt.clinicId)
+  activeClinicReviewAppointmentId.value = appt.appointmentId
+  clinicReviewError.value = ''
+  clinicReviewForm.value = {
+    rating: existingReview?.rating || 0,
+    comment: existingReview?.comment || '',
+  }
+}
+
+function cancelClinicReview() {
+  activeClinicReviewAppointmentId.value = null
+  clinicReviewForm.value = {
+    rating: 0,
+    comment: '',
+  }
+  clinicReviewError.value = ''
+}
+
+async function submitClinicReview(appt: any) {
+  if (!auth.user?.userId) {
+    clinicReviewError.value = 'Please log in to review this clinic'
+    return
+  }
+
+  if (clinicReviewForm.value.rating < 1) {
+    clinicReviewError.value = 'Please select a rating'
+    return
+  }
+
+  try {
+    const existingReview = getClinicReview(appt.clinicId)
+    const savedReview = existingReview
+      ? await updateReviewAPI(existingReview.reviewId, auth.user.userId, clinicReviewForm.value.rating, clinicReviewForm.value.comment)
+      : await createClinicReview(appt.clinicId, auth.user.userId, clinicReviewForm.value.rating, clinicReviewForm.value.comment)
+
+    clinicReviews.value = {
+      ...clinicReviews.value,
+      [appt.clinicId]: savedReview,
+    }
+    cancelClinicReview()
+  } catch (error) {
+    clinicReviewError.value = error instanceof Error ? error.message : 'Failed to save clinic review'
+  }
+}
+
+async function deleteClinicReview(appt: any) {
+  if (!auth.user?.userId) {
+    clinicReviewError.value = 'Please log in to delete this review'
+    return
+  }
+
+  const existingReview = getClinicReview(appt.clinicId)
+  if (!existingReview) return
+  if (!confirm('Delete your review for this clinic?')) return
+
+  try {
+    await deleteReviewAPI(existingReview.reviewId, auth.user.userId)
+    clinicReviews.value = {
+      ...clinicReviews.value,
+      [appt.clinicId]: null,
+    }
+    cancelClinicReview()
+  } catch (error) {
+    clinicReviewError.value = error instanceof Error ? error.message : 'Failed to delete clinic review'
+  }
 }
 
 async function submitListing() {
@@ -1951,6 +2119,63 @@ watch([() => newAppointment.value.clinicId, appointmentDate], () => {
   background: #f7fafc;
   padding: 8px 12px;
   border-radius: 8px;
+}
+
+.clinic-review-section {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 6px;
+  padding-top: 12px;
+}
+
+.clinic-review-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.clinic-review-stars {
+  color: #cbd5e0;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.clinic-review-stars .active,
+.clinic-review-stars.editable button.active {
+  color: #f97316;
+}
+
+.clinic-review-stars.editable {
+  display: flex;
+  gap: 4px;
+}
+
+.clinic-review-stars.editable button {
+  background: transparent;
+  border: 0;
+  color: #cbd5e0;
+  cursor: pointer;
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.clinic-review-comment {
+  color: #4a5568;
+  font-size: 0.92rem;
+  margin: 6px 0 0;
+}
+
+.clinic-review-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.clinic-review-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .appointments-empty {
