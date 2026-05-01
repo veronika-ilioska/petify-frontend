@@ -4,7 +4,43 @@
       <button class="btn btn-outline-secondary btn-sm" type="button" @click="goPrevMonth">
         Prev
       </button>
-      <div class="calendar-title">{{ monthLabel }}</div>
+
+      <div
+        v-if="!isEditingMonth"
+        class="calendar-title"
+        title="Double-click to change month and year"
+        @dblclick="startEditingMonth"
+      >
+        {{ monthLabel }}
+      </div>
+
+      <div v-else class="month-year-editor">
+        <select v-model.number="editMonth" class="form-control form-control-sm month-select">
+          <option v-for="m in months" :key="m.value" :value="m.value">
+            {{ m.label }}
+          </option>
+        </select>
+
+        <input
+          ref="yearInputRef"
+          v-model.number="editYear"
+          type="number"
+          class="form-control form-control-sm year-input"
+          min="1900"
+          max="2100"
+          @keyup.enter="applyMonthYearInput"
+          @keyup.esc="cancelEditingMonth"
+        />
+
+        <button class="btn btn-sm btn-primary" type="button" @click="applyMonthYearInput">
+          Go
+        </button>
+
+        <button class="btn btn-sm btn-outline-secondary" type="button" @click="cancelEditingMonth">
+          Cancel
+        </button>
+      </div>
+
       <button class="btn btn-outline-secondary btn-sm" type="button" @click="goNextMonth">
         Next
       </button>
@@ -14,6 +50,7 @@
       <div v-for="dayName in dayNames" :key="dayName" class="calendar-cell calendar-day-name">
         {{ dayName }}
       </div>
+
       <button
         v-for="day in calendarDays"
         :key="day.key"
@@ -35,7 +72,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 
 type AppointmentDay = {
   appointmentId: number
@@ -54,25 +91,53 @@ const emit = defineEmits<{
 const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
 const monthCursor = ref(new Date())
 
+const isEditingMonth = ref(false)
+const editMonth = ref(new Date().getMonth())
+const editYear = ref(new Date().getFullYear())
+const yearInputRef = ref<HTMLInputElement | null>(null)
+
+const months = [
+  { value: 0, label: 'January' },
+  { value: 1, label: 'February' },
+  { value: 2, label: 'March' },
+  { value: 3, label: 'April' },
+  { value: 4, label: 'May' },
+  { value: 5, label: 'June' },
+  { value: 6, label: 'July' },
+  { value: 7, label: 'August' },
+  { value: 8, label: 'September' },
+  { value: 9, label: 'October' },
+  { value: 10, label: 'November' },
+  { value: 11, label: 'December' },
+]
+
 const appointmentDateKeys = computed(() => {
   const keys = new Set<string>()
+
   props.appointments.forEach((appt) => {
-    const key = toDateKey(new Date(appt.dateTime))
-    keys.add(key)
+    keys.add(toDateKey(new Date(appt.dateTime)))
   })
+
   return keys
 })
 
 const monthLabel = computed(() => {
-  const date = monthCursor.value
-  return date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  return monthCursor.value.toLocaleDateString('en-US', {
+    month: 'long',
+    year: 'numeric',
+  })
 })
 
 const calendarDays = computed(() => {
-  const firstDay = new Date(monthCursor.value.getFullYear(), monthCursor.value.getMonth(), 1)
-  const lastDay = new Date(monthCursor.value.getFullYear(), monthCursor.value.getMonth() + 1, 0)
+  const year = monthCursor.value.getFullYear()
+  const month = monthCursor.value.getMonth()
+
+  const firstDay = new Date(year, month, 1)
+  const lastDay = new Date(year, month + 1, 0)
+
   const startOffset = firstDay.getDay()
   const totalDays = lastDay.getDate()
+
   const cells: Array<{
     key: string
     date?: Date
@@ -81,13 +146,17 @@ const calendarDays = computed(() => {
     hasAppointments: boolean
   }> = []
 
-  for (let i = 0; i < startOffset; i += 1) {
-    cells.push({ key: `empty-${i}`, hasAppointments: false })
+  for (let i = 0; i < startOffset; i++) {
+    cells.push({
+      key: `empty-${i}`,
+      hasAppointments: false,
+    })
   }
 
-  for (let day = 1; day <= totalDays; day += 1) {
-    const date = new Date(monthCursor.value.getFullYear(), monthCursor.value.getMonth(), day)
+  for (let day = 1; day <= totalDays; day++) {
+    const date = new Date(year, month, day)
     const dateKey = toDateKey(date)
+
     cells.push({
       key: dateKey,
       date,
@@ -99,19 +168,45 @@ const calendarDays = computed(() => {
 
   const remainder = cells.length % 7
   if (remainder !== 0) {
-    const fill = 7 - remainder
-    for (let i = 0; i < fill; i += 1) {
-      cells.push({ key: `tail-${i}`, hasAppointments: false })
+    for (let i = 0; i < 7 - remainder; i++) {
+      cells.push({
+        key: `tail-${i}`,
+        hasAppointments: false,
+      })
     }
   }
 
   return cells
 })
 
+function startEditingMonth() {
+  editMonth.value = monthCursor.value.getMonth()
+  editYear.value = monthCursor.value.getFullYear()
+  isEditingMonth.value = true
+
+  nextTick(() => {
+    yearInputRef.value?.focus()
+  })
+}
+
+function applyMonthYearInput() {
+  if (!editYear.value || editYear.value < 1900 || editYear.value > 2100) {
+    return
+  }
+
+  monthCursor.value = new Date(editYear.value, editMonth.value, 1)
+  isEditingMonth.value = false
+}
+
+function cancelEditingMonth() {
+  isEditingMonth.value = false
+}
+
 function toDateKey(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
+
   return `${year}-${month}-${day}`
 }
 
@@ -145,12 +240,32 @@ function goNextMonth() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
 .calendar-title {
   font-weight: 700;
   color: #1a202c;
+  cursor: pointer;
+  min-width: 180px;
+  text-align: center;
+}
+
+.month-year-editor {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  justify-content: center;
+}
+
+.month-select {
+  max-width: 150px;
+}
+
+.year-input {
+  max-width: 100px;
 }
 
 .calendar-grid {
@@ -216,4 +331,3 @@ function goNextMonth() {
   background: #fff;
 }
 </style>
-

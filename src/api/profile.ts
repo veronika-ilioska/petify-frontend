@@ -51,6 +51,11 @@ export interface OwnerAppointment {
   notes?: string
 }
 
+export interface AppointmentSlot {
+  dateTime: string
+  label: string
+}
+
 export async function getUserProfile(userId: number): Promise<UserProfile> {
   const url = joinUrl(getBaseUrl(), `/api/users/${userId}`)
   const response = await fetch(url, {
@@ -295,6 +300,35 @@ export async function getClinics(): Promise<VetClinic[]> {
   if (!contentType.includes('application/json')) {
     const text = await response.text()
     throw new Error(`Clinics API returned non-JSON. Check VITE_API_BASE_URL/backend. ${text.slice(0, 200)}`)
+  }
+
+  return await response.json()
+}
+
+export async function getClinicAvailableSlots(clinicId: number, date: string): Promise<AppointmentSlot[]> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments/clinics/${clinicId}/available-slots?date=${encodeURIComponent(date)}`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    let apiError = ''
+    try {
+      const error = JSON.parse(text)
+      apiError = error.error || ''
+    } catch {
+      apiError = ''
+    }
+
+    if (apiError) {
+      throw new Error(apiError)
+    }
+
+    throw new Error(`Failed to fetch available slots: ${response.status} ${response.statusText}. ${text.slice(0, 200)}`)
   }
 
   return await response.json()

@@ -458,7 +458,6 @@
 
           <!-- Create Appointment Tab -->
           <div v-if="activeTab === 'appointments'" class="tab-content-section">
-            <h2 class="section-title">Create Appointment</h2>
             <div v-if="appointmentsError" class="alert alert-danger">
               {{ appointmentsError }}
             </div>
@@ -497,7 +496,7 @@
                 </div>
               </div>
             </div>
-
+            <h2 class="section-title">Create Appointment</h2>
             <div v-if="pets.length === 0" class="empty-state">
               <p>You need to have at least one pet to create an appointment.</p>
             </div>
@@ -535,14 +534,36 @@
                 </div>
 
                 <div class="form-group">
-                  <label for="appointmentDate" class="form-label">Date & Time *</label>
+                  <label for="appointmentDate" class="form-label">Date *</label>
                   <input
-                    v-model="newAppointment.dateTime"
-                    type="datetime-local"
+                    v-model="appointmentDate"
+                    type="date"
                     id="appointmentDate"
                     class="form-control"
+                    :min="todayDate"
                     required
                   />
+                </div>
+
+                <div class="form-group">
+                  <label for="appointmentSlot" class="form-label">Available Time Slot *</label>
+                  <select
+                    v-model="newAppointment.dateTime"
+                    id="appointmentSlot"
+                    class="form-select"
+                    :disabled="!newAppointment.clinicId || !appointmentDate || isSlotsLoading || availableSlots.length === 0"
+                    required
+                  >
+                    <option value="">{{ appointmentSlotPlaceholder }}</option>
+                    <option v-for="slot in availableSlots" :key="slot.dateTime" :value="slot.dateTime">
+                      {{ slot.label }}
+                    </option>
+                  </select>
+                  <small v-if="isSlotsLoading" class="text-muted">Loading available slots...</small>
+                  <small v-else-if="slotsError" class="text-danger">{{ slotsError }}</small>
+                  <small v-else-if="newAppointment.clinicId && appointmentDate && availableSlots.length === 0" class="text-muted">
+                    No available slots for this clinic on the selected date.
+                  </small>
                 </div>
 
                 <div class="form-group">
@@ -698,6 +719,7 @@ import {
   loadUserVerificationStatus,
   createAppointment,
   getClinics,
+  getClinicAvailableSlots,
   getOwnerAppointments,
 } from '../api/profile'
 import { getFavoritedListings, removeFavorite as removeFavoriteAPI } from '../api/favorites'
@@ -713,17 +735,21 @@ const favorites = ref<any[]>([])
 const adminUsers = ref<any[]>([])
 const adminListings = ref<any[]>([])
 const clinics = ref<any[]>([])
+const availableSlots = ref<any[]>([])
 const appointments = ref<any[]>([])
 const selectedAppointmentDate = ref('')
+const appointmentDate = ref('')
 const appointmentsError = ref('')
 const isLoading = ref(false)
 const isSubmitting = ref(false)
 const isPetSubmitting = ref(false)
 const isAppointmentSubmitting = ref(false)
 const isAppointmentsLoading = ref(false)
+const isSlotsLoading = ref(false)
 const errorMessage = ref('')
 const appointmentError = ref('')
 const clinicsError = ref('')
+const slotsError = ref('')
 
 const adminStats = ref({
   totalUsers: 0,
@@ -766,6 +792,16 @@ const isAdmin = computed(() => {
 
 const userType = computed(() => {
   return auth.user?.userType || 'Unknown'
+})
+
+const todayDate = computed(() => toDateKey(new Date()))
+
+const appointmentSlotPlaceholder = computed(() => {
+  if (!newAppointment.value.clinicId) return 'Choose a clinic first...'
+  if (!appointmentDate.value) return 'Choose a date first...'
+  if (isSlotsLoading.value) return 'Loading slots...'
+  if (availableSlots.value.length === 0) return 'No available slots'
+  return 'Choose a time slot...'
 })
 
 // Store pet details cache for images
@@ -898,6 +934,26 @@ async function loadAppointments() {
   }
 }
 
+async function loadAvailableSlots() {
+  newAppointment.value.dateTime = ''
+  availableSlots.value = []
+  slotsError.value = ''
+
+  if (!newAppointment.value.clinicId || !appointmentDate.value) {
+    return
+  }
+
+  try {
+    isSlotsLoading.value = true
+    availableSlots.value = await getClinicAvailableSlots(newAppointment.value.clinicId, appointmentDate.value)
+  } catch (error) {
+    availableSlots.value = []
+    slotsError.value = error instanceof Error ? error.message : 'Failed to load available slots'
+  } finally {
+    isSlotsLoading.value = false
+  }
+}
+
 function toDateKey(date: Date): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
@@ -994,7 +1050,10 @@ function resetAppointmentForm() {
     dateTime: '',
     notes: '',
   }
+  appointmentDate.value = ''
+  availableSlots.value = []
   appointmentError.value = ''
+  slotsError.value = ''
 }
 
 function resetPetForm() {
@@ -1213,6 +1272,10 @@ watch(activeTab, (newTab) => {
   if (newTab === 'admin' && isAdmin.value) {
     loadAdminData()
   }
+})
+
+watch([() => newAppointment.value.clinicId, appointmentDate], () => {
+  loadAvailableSlots()
 })
 </script>
 
