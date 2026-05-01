@@ -6,6 +6,7 @@ import SignupView from '../views/SignupView.vue'
 import ProfileView from '../views/ProfileView.vue'
 import OwnerProfileView from '../views/OwnerProfileView.vue'
 import AdminReviewsView from '@/views/AdminReviewsView.vue'
+import ClinicDashboardView from '@/views/ClinicDashboardView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -29,6 +30,11 @@ const router = createRouter({
       path: '/profile',
       name: 'profile',
       component: ProfileView,
+    },
+    {
+      path: '/clinics',
+      name: 'clinic-dashboard',
+      component: ClinicDashboardView,
     },
     {
       path: '/profile/:userId',

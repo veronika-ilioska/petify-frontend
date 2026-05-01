@@ -25,6 +25,9 @@
         <div class="d-flex align-items-center gap-2 ms-auto">
           <div class="d-flex gap-2">
             <template v-if="auth.isAuthenticated">
+              <RouterLink v-if="auth.user?.userType === 'CLINIC'" class="btn btn-outline-secondary" to="/clinics">
+                Clinic Dashboard
+              </RouterLink>
               <template v-if="auth.user?.userType === 'ADMIN'">
                 <RouterLink class="btn btn-admin" to="/admin/reviews">
                   <i class="bi bi-eye"></i> Reviews

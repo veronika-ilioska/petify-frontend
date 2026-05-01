@@ -56,6 +56,28 @@ export interface AppointmentSlot {
   label: string
 }
 
+export interface ClinicAppointment {
+  appointmentId: number
+  clinicId: number
+  animalId: number
+  petName?: string
+  petSpecies?: string
+  ownerId: number
+  ownerName?: string
+  status: string
+  dateTime: string
+  label: string
+  notes?: string
+}
+
+export interface ClinicUnavailableSlot {
+  slotId: number
+  clinicId: number
+  dateTime: string
+  label: string
+  reason?: string
+}
+
 export async function getUserProfile(userId: number): Promise<UserProfile> {
   const url = joinUrl(getBaseUrl(), `/api/users/${userId}`)
   const response = await fetch(url, {
@@ -305,6 +327,24 @@ export async function getClinics(): Promise<VetClinic[]> {
   return await response.json()
 }
 
+export async function getMyClinic(userId: number): Promise<VetClinic> {
+  const url = joinUrl(getBaseUrl(), `/api/clinics/my`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || `Failed to fetch clinic profile: ${response.statusText}`)
+  }
+
+  return await response.json()
+}
+
 export async function getClinicAvailableSlots(clinicId: number, date: string): Promise<AppointmentSlot[]> {
   const url = joinUrl(getBaseUrl(), `/api/appointments/clinics/${clinicId}/available-slots?date=${encodeURIComponent(date)}`)
   const response = await fetch(url, {
@@ -332,6 +372,168 @@ export async function getClinicAvailableSlots(clinicId: number, date: string): P
   }
 
   return await response.json()
+}
+
+export async function getClinicAppointments(clinicId: number, date: string): Promise<ClinicAppointment[]> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments/clinics/${clinicId}?date=${encodeURIComponent(date)}`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Failed to fetch clinic appointments: ${response.status} ${response.statusText}. ${text.slice(0, 200)}`)
+  }
+
+  return await response.json()
+}
+
+export async function getMyClinicAppointments(userId: number, date: string): Promise<ClinicAppointment[]> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments/my-clinic?date=${encodeURIComponent(date)}`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Failed to fetch clinic appointments: ${response.status} ${response.statusText}. ${text.slice(0, 200)}`)
+  }
+
+  return await response.json()
+}
+
+export async function getMyClinicAvailableSlots(userId: number, date: string): Promise<AppointmentSlot[]> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments/my-clinic/available-slots?date=${encodeURIComponent(date)}`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || `Failed to fetch available slots: ${response.statusText}`)
+  }
+
+  return await response.json()
+}
+
+export async function getClinicUnavailableSlots(clinicId: number, date: string): Promise<ClinicUnavailableSlot[]> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments/clinics/${clinicId}/unavailable-slots?date=${encodeURIComponent(date)}`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Failed to fetch unavailable slots: ${response.status} ${response.statusText}. ${text.slice(0, 200)}`)
+  }
+
+  return await response.json()
+}
+
+export async function getMyClinicUnavailableSlots(userId: number, date: string): Promise<ClinicUnavailableSlot[]> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments/my-clinic/unavailable-slots?date=${encodeURIComponent(date)}`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Failed to fetch unavailable slots: ${response.status} ${response.statusText}. ${text.slice(0, 200)}`)
+  }
+
+  return await response.json()
+}
+
+export async function createClinicUnavailableSlot(
+  clinicId: number,
+  data: { dateTime: string; reason?: string }
+): Promise<ClinicUnavailableSlot> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments/clinics/${clinicId}/unavailable-slots`)
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || `Failed to block slot: ${response.statusText}`)
+  }
+
+  return await response.json()
+}
+
+export async function createMyClinicUnavailableSlot(
+  userId: number,
+  data: { dateTime: string; reason?: string }
+): Promise<ClinicUnavailableSlot> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments/my-clinic/unavailable-slots`)
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+    body: JSON.stringify(data),
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || `Failed to block slot: ${response.statusText}`)
+  }
+
+  return await response.json()
+}
+
+export async function deleteClinicUnavailableSlot(clinicId: number, slotId: number): Promise<void> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments/clinics/${clinicId}/unavailable-slots/${slotId}`)
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || `Failed to unblock slot: ${response.statusText}`)
+  }
+}
+
+export async function deleteMyClinicUnavailableSlot(userId: number, slotId: number): Promise<void> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments/my-clinic/unavailable-slots/${slotId}`)
+  const response = await fetch(url, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+  })
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(error.error || `Failed to unblock slot: ${response.statusText}`)
+  }
 }
 
 export async function getOwnerAppointments(userId: number): Promise<OwnerAppointment[]> {
