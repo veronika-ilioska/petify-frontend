@@ -63,17 +63,6 @@
             <li class="nav-item" role="presentation">
               <button
                 class="nav-link"
-                :class="{ active: activeTab === 'add-pet' }"
-                @click="activeTab = 'add-pet'"
-                type="button"
-                role="tab"
-              >
-                <i class="bi bi-plus-circle-fill"></i> Add Pet
-              </button>
-            </li>
-            <li class="nav-item" role="presentation">
-              <button
-                class="nav-link"
                 :class="{ active: activeTab === 'favorites' }"
                 @click="activeTab = 'favorites'"
                 type="button"
@@ -167,12 +156,17 @@
 
           <!-- Pets Tab -->
           <div v-if="activeTab === 'pets'" class="tab-content-section">
-            <h2 class="section-title">My Pets</h2>
+            <div class="section-header-row">
+              <h2 class="section-title">My Pets</h2>
+              <button class="btn btn-primary btn-sm" type="button" @click="openAddPetForm">
+                <i class="bi bi-plus-circle-fill"></i> Add Pet
+              </button>
+            </div>
             <div v-if="pets.length === 0" class="empty-state">
               <img src="@/img/all_outline.png" alt="No pets" class="empty-icon-img" />
               <p class="empty-text">You don't have any pets yet.</p>
               <p class="empty-subtext">Add pets to create listings!</p>
-              <a href="#" @click.prevent="activeTab = 'add-pet'" class="btn btn-primary btn-sm">
+              <a href="#" @click.prevent="openAddPetForm" class="btn btn-primary btn-sm">
                 Add your first pet
               </a>
             </div>
@@ -305,8 +299,8 @@
             </div>
           </div>
 
-          <!-- Add Pet Tab -->
-          <div v-if="activeTab === 'add-pet'" class="tab-content-section">
+          <!-- Add Pet Form -->
+          <div v-if="activeTab === 'pets' && showAddPetForm" ref="addPetPanel" class="tab-content-section add-pet-panel">
             <h2 class="section-title">Add New Pet</h2>
             <div class="form-card">
               <form @submit.prevent="submitPet">
@@ -382,14 +376,21 @@
                 </div>
 
                 <div class="form-group">
-                  <label for="petPhotoUrl" class="form-label">Photo URL</label>
+                  <label for="petPhoto" class="form-label">Photo</label>
                   <input
-                    v-model="newPet.photoUrl"
-                    type="url"
-                    id="petPhotoUrl"
+                    type="file"
+                    id="petPhoto"
                     class="form-control"
-                    placeholder="https://example.com/photo.jpg"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    @change="handlePetPhotoChange"
                   />
+                  <small class="text-muted">JPG, PNG, WEBP, or GIF up to 5MB.</small>
+                  <div v-if="petPhotoPreview" class="pet-photo-preview">
+                    <img :src="petPhotoPreview" alt="Selected pet preview" />
+                    <button type="button" class="btn btn-sm btn-outline-secondary" @click="clearPetPhoto">
+                      Remove photo
+                    </button>
+                  </div>
                 </div>
 
                 <div v-if="errorMessage" class="alert alert-danger">
@@ -403,6 +404,9 @@
                   </button>
                   <button type="button" @click="resetPetForm" class="btn btn-outline-secondary" :disabled="isPetSubmitting">
                     Reset
+                  </button>
+                  <button type="button" @click="hideAddPetForm" class="btn btn-outline-secondary" :disabled="isPetSubmitting">
+                    Cancel
                   </button>
                 </div>
               </form>
@@ -704,7 +708,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import OwnerAppointmentsCalendar from '../components/OwnerAppointmentsCalendar.vue'
@@ -728,7 +732,7 @@ import { getAllUsers, getAllListings } from '../api/admin'
 const router = useRouter()
 const auth = useAuthStore()
 
-const activeTab = ref<'listings' | 'pets' | 'add-pet' | 'create-listing' | 'favorites' | 'admin' | 'appointments'>('listings')
+const activeTab = ref<'listings' | 'pets' | 'create-listing' | 'favorites' | 'admin' | 'appointments'>('listings')
 const listings = ref<any[]>([])
 const pets = ref<any[]>([])
 const favorites = ref<any[]>([])
@@ -750,6 +754,10 @@ const errorMessage = ref('')
 const appointmentError = ref('')
 const clinicsError = ref('')
 const slotsError = ref('')
+const showAddPetForm = ref(false)
+const addPetPanel = ref<HTMLElement | null>(null)
+const petPhotoFile = ref<File | null>(null)
+const petPhotoPreview = ref('')
 
 const adminStats = ref({
   totalUsers: 0,
@@ -768,7 +776,6 @@ const newPet = ref({
   name: '',
   sex: '',
   dateOfBirth: '',
-  photoUrl: '',
   type: 'PET',
   species: '',
   breed: '',
@@ -1056,18 +1063,72 @@ function resetAppointmentForm() {
   slotsError.value = ''
 }
 
+function clearPetPhoto() {
+  if (petPhotoPreview.value) {
+    URL.revokeObjectURL(petPhotoPreview.value)
+  }
+  petPhotoPreview.value = ''
+  petPhotoFile.value = null
+
+  const input = document.getElementById('petPhoto') as HTMLInputElement | null
+  if (input) {
+    input.value = ''
+  }
+}
+
+function handlePetPhotoChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0] || null
+
+  if (!file) {
+    clearPetPhoto()
+    return
+  }
+
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  if (!allowedTypes.includes(file.type)) {
+    errorMessage.value = 'Pet photo must be a JPG, PNG, WEBP, or GIF image'
+    clearPetPhoto()
+    return
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    errorMessage.value = 'Pet photo must be 5MB or smaller'
+    clearPetPhoto()
+    return
+  }
+
+  if (petPhotoPreview.value) {
+    URL.revokeObjectURL(petPhotoPreview.value)
+  }
+  errorMessage.value = ''
+  petPhotoFile.value = file
+  petPhotoPreview.value = URL.createObjectURL(file)
+}
+
 function resetPetForm() {
   newPet.value = {
     name: '',
     sex: '',
     dateOfBirth: '',
-    photoUrl: '',
     type: 'PET',
     species: '',
     breed: '',
     locatedName: '',
   }
+  clearPetPhoto()
   errorMessage.value = ''
+}
+
+async function openAddPetForm() {
+  showAddPetForm.value = true
+  await nextTick()
+  addPetPanel.value?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
+
+function hideAddPetForm() {
+  resetPetForm()
+  showAddPetForm.value = false
 }
 
 async function submitPet() {
@@ -1084,7 +1145,7 @@ async function submitPet() {
       name: newPet.value.name,
       sex: newPet.value.sex,
       dateOfBirth: newPet.value.dateOfBirth || undefined,
-      photoUrl: newPet.value.photoUrl || undefined,
+      photo: petPhotoFile.value || undefined,
       type: newPet.value.type,
       species: newPet.value.species,
       breed: newPet.value.breed || undefined,
@@ -1099,6 +1160,7 @@ async function submitPet() {
     // Reload pets and promote user to owner if needed
     await loadPets()
     resetPetForm()
+    showAddPetForm.value = false
     activeTab.value = 'pets'
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : 'Failed to add pet'
@@ -1264,6 +1326,12 @@ onMounted(() => {
 
   if (isAdmin.value) {
     loadAdminData()
+  }
+})
+
+onBeforeUnmount(() => {
+  if (petPhotoPreview.value) {
+    URL.revokeObjectURL(petPhotoPreview.value)
   }
 })
 
@@ -1443,6 +1511,23 @@ watch([() => newAppointment.value.clinicId, appointmentDate], () => {
   color: #1a202c;
   margin: 0 0 30px 0;
   letter-spacing: -0.5px;
+}
+
+.section-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 30px;
+}
+
+.section-header-row .section-title {
+  margin-bottom: 0;
+}
+
+.add-pet-panel {
+  border-top: 1px solid #e2e8f0;
+  padding-top: 32px;
 }
 
 /* Empty State */
@@ -1731,6 +1816,22 @@ watch([() => newAppointment.value.clinicId, appointmentDate], () => {
   box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.1);
 }
 
+.pet-photo-preview {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.pet-photo-preview img {
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  object-fit: cover;
+}
+
 .form-actions {
   display: flex;
   gap: 12px;
@@ -1908,6 +2009,11 @@ watch([() => newAppointment.value.clinicId, appointmentDate], () => {
   .section-title {
     font-size: 1.4rem;
     margin-bottom: 20px;
+  }
+
+  .section-header-row {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .grid-container {

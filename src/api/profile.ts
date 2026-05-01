@@ -134,7 +134,7 @@ export async function createPet(
     name: string
     sex: string
     dateOfBirth?: string
-    photoUrl?: string
+    photo?: File
     type: string
     species: string
     breed?: string
@@ -142,21 +142,29 @@ export async function createPet(
   }
 ): Promise<Pet> {
   const url = joinUrl(getBaseUrl(), `/api/users/${userId}/pets`)
+  const formData = new FormData()
+
+  formData.append('name', data.name)
+  formData.append('sex', data.sex)
+  formData.append('type', data.type)
+  formData.append('species', data.species)
+  if (data.dateOfBirth) formData.append('dateOfBirth', data.dateOfBirth)
+  if (data.breed) formData.append('breed', data.breed)
+  if (data.locatedName) formData.append('locatedName', data.locatedName)
+  if (data.photo) formData.append('photo', data.photo)
 
   console.log('🔗 API URL:', url)
   console.log('📦 Request payload:', data)
   console.log('📋 Headers:', {
-    'Content-Type': 'application/json',
     'X-User-Id': String(userId),
   })
 
   const response = await fetch(url, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
       'X-User-Id': String(userId),
     },
-    body: JSON.stringify(data),
+    body: formData,
   })
 
   console.log('📬 Response status:', response.status)
