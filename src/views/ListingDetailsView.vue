@@ -90,6 +90,23 @@
                 </ul>
               </div>
 
+              <div class="health-records-card" id="health-records">
+                <h2 class="section-title">Health Records</h2>
+                <div v-if="healthRecordsLoading" class="muted-text">Loading health records...</div>
+                <div v-else-if="healthRecordsError" class="alert alert-danger">{{ healthRecordsError }}</div>
+                <div v-else-if="healthRecords.length === 0" class="muted-text">No health records have been added yet.</div>
+                <div v-else class="health-record-list">
+                  <article v-for="record in healthRecords" :key="record.healthRecordId" class="health-record-item">
+                    <div class="health-record-heading">
+                      <strong>{{ record.type }}</strong>
+                      <span>{{ formatRecordDate(record.date) }}</span>
+                    </div>
+                    <p>{{ record.description || 'No description' }}</p>
+                    <small v-if="record.clinicName">{{ record.clinicName }}</small>
+                  </article>
+                </div>
+              </div>
+
               <!-- Description -->
               <div v-if="listing.description" class="description-card">
                 <h2 class="section-title">Description</h2>
@@ -125,7 +142,7 @@
                   </div>
                   <div v-if="animalName" class="info-row">
                     <span class="label">Pet Name:</span>
-                    <span class="value">{{ animalName }}</span>
+                    <button class="pet-link" type="button" @click="scrollToHealthRecords">{{ animalName }}</button>
                   </div>
                 </div>
               </div>
@@ -194,7 +211,7 @@ import { computed, ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import type { Listing } from '../types/listing'
 import { fetchListingById, fetchUserName, fetchPetName, fetchListings } from '../api/listings'
-import { getPet } from '../api/profile'
+import { getPet, getPetHealthRecords, type HealthRecord } from '../api/profile'
 import { useAuthStore } from '../stores/auth'
 import { addFavorite, removeFavorite, getFavoritedListings } from '../api/favorites'
 
@@ -214,6 +231,9 @@ const copyLinkText = ref('Copy link')
 const relatedListings = ref<Listing[]>([])
 const relatedFavoritedIds = ref<Set<string | number>>(new Set())
 const userFavoritedIds = ref<Set<number>>(new Set())
+const healthRecords = ref<HealthRecord[]>([])
+const healthRecordsLoading = ref(false)
+const healthRecordsError = ref('')
 
 let abort: AbortController | null = null
 
@@ -290,6 +310,8 @@ async function load() {
   animalName.value = null
   isFavorited.value = false
   relatedListings.value = []
+  healthRecords.value = []
+  healthRecordsError.value = ''
 
   abort?.abort()
   abort = new AbortController()
@@ -311,6 +333,10 @@ async function load() {
     // Add pet image to listing
     if (listing.value && petResult?.photoUrl) {
       listing.value.imageUrl = petResult.photoUrl
+    }
+
+    if (data.animalId) {
+      await loadHealthRecords(data.animalId)
     }
 
     // Fetch related listings
@@ -351,6 +377,33 @@ async function load() {
   } finally {
     loading.value = false
   }
+}
+
+async function loadHealthRecords(animalId: number) {
+  try {
+    healthRecordsLoading.value = true
+    healthRecords.value = await getPetHealthRecords(animalId)
+    healthRecordsError.value = ''
+  } catch (error) {
+    healthRecords.value = []
+    healthRecordsError.value = error instanceof Error ? error.message : 'Failed to load health records'
+  } finally {
+    healthRecordsLoading.value = false
+  }
+}
+
+function formatRecordDate(value: string) {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+function scrollToHealthRecords() {
+  document.getElementById('health-records')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
 }
 
 function checkFavorite() {
@@ -641,6 +694,7 @@ watch(id, () => {
 /* Cards */
 .pet-info-card,
 .health-traits-card,
+.health-records-card,
 .description-card,
 .location-card,
 .owner-card {
@@ -648,6 +702,50 @@ watch(id, () => {
   border-radius: 12px;
   padding: 24px;
   border: 1px solid #e5e7eb;
+}
+
+.health-record-list {
+  display: grid;
+  gap: 12px;
+}
+
+.health-record-item {
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.health-record-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: #111827;
+}
+
+.health-record-heading span,
+.health-record-item small,
+.muted-text {
+  color: #6b7280;
+}
+
+.health-record-item p {
+  color: #374151;
+  margin: 8px 0 4px;
+}
+
+.pet-link {
+  background: transparent;
+  border: 0;
+  color: #d97706;
+  cursor: pointer;
+  font-weight: 700;
+  padding: 0;
+  text-align: right;
+}
+
+.pet-link:hover {
+  color: #b45309;
+  text-decoration: underline;
 }
 
 .section-title {
@@ -993,6 +1091,7 @@ watch(id, () => {
 
   .pet-info-card,
   .health-traits-card,
+  .health-records-card,
   .description-card,
   .location-card,
   .owner-card,

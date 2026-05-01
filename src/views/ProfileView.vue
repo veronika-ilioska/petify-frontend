@@ -568,6 +568,56 @@
                       </div>
                     </form>
                   </div>
+                  <div v-if="appt.status === 'DONE'" class="health-record-section">
+                    <div v-if="getHealthRecordForAppointment(appt) && activeHealthRecordAppointmentId !== appt.appointmentId" class="health-record-summary">
+                      <div>
+                        <strong>{{ getHealthRecordForAppointment(appt)?.type }}</strong>
+                        <p>{{ getHealthRecordForAppointment(appt)?.description || 'No description' }}</p>
+                        <small>{{ formatDate(getHealthRecordForAppointment(appt)?.date || appt.dateTime) }}</small>
+                      </div>
+                    </div>
+
+                    <button
+                      v-else-if="activeHealthRecordAppointmentId !== appt.appointmentId"
+                      type="button"
+                      class="btn btn-sm btn-outline-success"
+                      @click="startHealthRecord(appt)"
+                    >
+                      Add health record
+                    </button>
+
+                    <form v-else class="health-record-form" @submit.prevent="submitHealthRecord(appt)">
+                      <div class="form-group">
+                        <label class="form-label">Record type *</label>
+                        <input
+                          v-model="healthRecordForm.type"
+                          class="form-control"
+                          placeholder="Vaccination, checkup, treatment..."
+                          required
+                        />
+                      </div>
+                      <div class="form-group">
+                        <label class="form-label">Description</label>
+                        <textarea
+                          v-model="healthRecordForm.description"
+                          class="form-control"
+                          rows="3"
+                          placeholder="Describe what happened during the appointment..."
+                        ></textarea>
+                      </div>
+                      <div v-if="healthRecordError" class="alert alert-danger">
+                        {{ healthRecordError }}
+                      </div>
+                      <div class="clinic-review-actions">
+                        <button type="submit" class="btn btn-sm btn-success" :disabled="isHealthRecordSubmitting">
+                          {{ isHealthRecordSubmitting ? 'Saving...' : 'Save health record' }}
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" @click="cancelHealthRecord">
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </div>
                 </div>
               </div>
             </div>
@@ -794,9 +844,12 @@ import {
   loadUserVerificationStatus,
   createAppointment,
   cancelOwnerAppointment,
+  createHealthRecord,
   getClinics,
   getClinicAvailableSlots,
+  getPetHealthRecords,
   getOwnerAppointments,
+  type HealthRecord,
 } from '../api/profile'
 import { getFavoritedListings, removeFavorite as removeFavoriteAPI } from '../api/favorites'
 import { getAllUsers, getAllListings } from '../api/admin'
@@ -821,9 +874,11 @@ const clinics = ref<any[]>([])
 const availableSlots = ref<any[]>([])
 const appointments = ref<any[]>([])
 const clinicReviews = ref<Record<number, Review | null>>({})
+const healthRecordsByPet = ref<Record<number, HealthRecord[]>>({})
 const selectedAppointmentDate = ref('')
 const appointmentDate = ref('')
 const activeClinicReviewAppointmentId = ref<number | null>(null)
+const activeHealthRecordAppointmentId = ref<number | null>(null)
 const appointmentsError = ref('')
 const isLoading = ref(false)
 const isSubmitting = ref(false)
@@ -831,12 +886,14 @@ const isPetSubmitting = ref(false)
 const isAppointmentSubmitting = ref(false)
 const cancellingAppointmentId = ref<number | null>(null)
 const isAppointmentsLoading = ref(false)
+const isHealthRecordSubmitting = ref(false)
 const isSlotsLoading = ref(false)
 const errorMessage = ref('')
 const appointmentError = ref('')
 const clinicsError = ref('')
 const slotsError = ref('')
 const clinicReviewError = ref('')
+const healthRecordError = ref('')
 const showAddPetForm = ref(false)
 const addPetPanel = ref<HTMLElement | null>(null)
 const petPhotoFile = ref<File | null>(null)
@@ -875,6 +932,11 @@ const newAppointment = ref({
 const clinicReviewForm = ref({
   rating: 0,
   comment: '',
+})
+
+const healthRecordForm = ref({
+  type: '',
+  description: '',
 })
 
 const isOwner = computed(() => {
@@ -1029,6 +1091,7 @@ async function loadAppointments() {
   }
 
   await loadClinicReviewsForDoneAppointments()
+  await loadHealthRecordsForAppointmentPets()
 }
 
 async function loadClinicReviewsForDoneAppointments() {
@@ -1050,6 +1113,25 @@ async function loadClinicReviewsForDoneAppointments() {
     }
   }))
   clinicReviews.value = nextReviews
+}
+
+async function loadHealthRecordsForAppointmentPets() {
+  const petIds = Array.from(new Set(
+    appointments.value
+      .filter((appt) => appt.animalId)
+      .map((appt) => Number(appt.animalId))
+  ))
+
+  const nextRecords: Record<number, HealthRecord[]> = {}
+  await Promise.all(petIds.map(async (petId) => {
+    try {
+      nextRecords[petId] = await getPetHealthRecords(petId)
+    } catch (error) {
+      console.error(`Failed to load health records for pet ${petId}:`, error)
+      nextRecords[petId] = []
+    }
+  }))
+  healthRecordsByPet.value = nextRecords
 }
 
 async function loadAvailableSlots() {
@@ -1185,6 +1267,66 @@ async function deleteClinicReview(appt: any) {
     cancelClinicReview()
   } catch (error) {
     clinicReviewError.value = error instanceof Error ? error.message : 'Failed to delete clinic review'
+  }
+}
+
+function getHealthRecordForAppointment(appt: any): HealthRecord | null {
+  if (!appt.animalId) return null
+  return (healthRecordsByPet.value[Number(appt.animalId)] || [])
+    .find((record) => record.appointmentId === appt.appointmentId) || null
+}
+
+function startHealthRecord(appt: any) {
+  activeHealthRecordAppointmentId.value = appt.appointmentId
+  healthRecordError.value = ''
+  healthRecordForm.value = {
+    type: '',
+    description: '',
+  }
+}
+
+function cancelHealthRecord() {
+  activeHealthRecordAppointmentId.value = null
+  healthRecordError.value = ''
+  healthRecordForm.value = {
+    type: '',
+    description: '',
+  }
+}
+
+async function submitHealthRecord(appt: any) {
+  if (!auth.user?.userId) {
+    healthRecordError.value = 'Please log in to add a health record'
+    return
+  }
+
+  if (!healthRecordForm.value.type.trim()) {
+    healthRecordError.value = 'Please enter the health record type'
+    return
+  }
+
+  try {
+    isHealthRecordSubmitting.value = true
+    healthRecordError.value = ''
+    const saved = await createHealthRecord(auth.user.userId, {
+      appointmentId: appt.appointmentId,
+      type: healthRecordForm.value.type.trim(),
+      description: healthRecordForm.value.description || undefined,
+    })
+
+    const petId = Number(saved.animalId)
+    healthRecordsByPet.value = {
+      ...healthRecordsByPet.value,
+      [petId]: [
+        saved,
+        ...(healthRecordsByPet.value[petId] || []).filter((record) => record.healthRecordId !== saved.healthRecordId),
+      ],
+    }
+    cancelHealthRecord()
+  } catch (error) {
+    healthRecordError.value = error instanceof Error ? error.message : 'Failed to add health record'
+  } finally {
+    isHealthRecordSubmitting.value = false
   }
 }
 
@@ -2178,6 +2320,31 @@ watch([() => newAppointment.value.clinicId, appointmentDate], () => {
   border-top: 1px solid #e2e8f0;
   margin-top: 6px;
   padding-top: 12px;
+}
+
+.health-record-section {
+  border-top: 1px solid #e2e8f0;
+  margin-top: 6px;
+  padding-top: 12px;
+}
+
+.health-record-summary {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 8px;
+  color: #166534;
+  padding: 12px;
+}
+
+.health-record-summary p {
+  color: #2f6f45;
+  margin: 4px 0;
+}
+
+.health-record-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .clinic-review-summary {

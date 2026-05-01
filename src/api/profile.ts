@@ -86,6 +86,38 @@ export interface ClinicUnavailableSlot {
   reason?: string
 }
 
+export interface HealthRecord {
+  healthRecordId: number
+  animalId: number
+  animalName?: string
+  appointmentId: number
+  clinicId?: number
+  clinicName?: string
+  type: string
+  description?: string
+  date: string
+  appointmentDateTime?: string
+}
+
+async function readJsonOrError<T>(response: Response, fallback: string): Promise<T> {
+  const text = await response.text()
+  let parsed: any = null
+
+  if (text) {
+    try {
+      parsed = JSON.parse(text)
+    } catch {
+      parsed = null
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(parsed?.error || `${fallback}: ${response.status} ${response.statusText}. ${text.slice(0, 200)}`)
+  }
+
+  return parsed as T
+}
+
 export async function getUserProfile(userId: number): Promise<UserProfile> {
   const url = joinUrl(getBaseUrl(), `/api/users/${userId}`)
   const response = await fetch(url, {
@@ -317,6 +349,39 @@ export async function createAppointment(
   }
 
   return await response.json()
+}
+
+export async function getPetHealthRecords(petId: number): Promise<HealthRecord[]> {
+  const url = joinUrl(getBaseUrl(), `/api/pets/${petId}/health-records`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  })
+
+  return await readJsonOrError<HealthRecord[]>(response, 'Failed to fetch health records')
+}
+
+export async function createHealthRecord(
+  userId: number,
+  data: {
+    appointmentId: number
+    type: string
+    description?: string
+  }
+): Promise<HealthRecord> {
+  const url = joinUrl(getBaseUrl(), `/api/health-records`)
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+    body: JSON.stringify(data),
+  })
+
+  return await readJsonOrError<HealthRecord>(response, 'Failed to create health record')
 }
 
 export async function cancelOwnerAppointment(userId: number, appointmentId: number): Promise<OwnerAppointment> {
