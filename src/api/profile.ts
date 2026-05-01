@@ -70,6 +70,14 @@ export interface ClinicAppointment {
   notes?: string
 }
 
+export interface AppNotification {
+  notificationId: number
+  type: string
+  message: string
+  isRead: boolean
+  createdAt: string
+}
+
 export interface ClinicUnavailableSlot {
   slotId: number
   clinicId: number
@@ -306,6 +314,36 @@ export async function createAppointment(
   if (!response.ok) {
     const error = await response.json()
     throw new Error(error.error || `Failed to create appointment: ${response.statusText}`)
+  }
+
+  return await response.json()
+}
+
+export async function cancelOwnerAppointment(userId: number, appointmentId: number): Promise<OwnerAppointment> {
+  const url = joinUrl(getBaseUrl(), `/api/appointments/my/${appointmentId}/cancel`)
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    let apiError = ''
+    try {
+      const error = JSON.parse(text)
+      apiError = error.error || ''
+    } catch {
+      apiError = ''
+    }
+
+    if (apiError) {
+      throw new Error(apiError)
+    }
+
+    throw new Error(`Failed to cancel appointment: ${response.status} ${response.statusText}. ${text.slice(0, 200)}`)
   }
 
   return await response.json()
@@ -557,6 +595,24 @@ export async function getOwnerAppointments(userId: number): Promise<OwnerAppoint
   if (!response.ok) {
     const text = await response.text()
     throw new Error(`Failed to fetch appointments: ${response.status} ${response.statusText}. ${text.slice(0, 200)}`)
+  }
+
+  return await response.json()
+}
+
+export async function getMyNotifications(userId: number): Promise<AppNotification[]> {
+  const url = joinUrl(getBaseUrl(), `/api/notifications/my`)
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-User-Id': String(userId),
+    },
+  })
+
+  if (!response.ok) {
+    const text = await response.text()
+    throw new Error(`Failed to fetch notifications: ${response.status} ${response.statusText}. ${text.slice(0, 200)}`)
   }
 
   return await response.json()

@@ -16,6 +16,7 @@
     <section class="container dashboard-body">
       <div v-if="accessError" class="alert alert-danger">{{ accessError }}</div>
       <div v-if="scheduleError" class="alert alert-danger">{{ scheduleError }}</div>
+      <div v-if="notificationsError" class="alert alert-danger">{{ notificationsError }}</div>
 
       <div v-if="!canUseDashboard" class="empty-state">
         <h2>Clinic login required</h2>
@@ -80,6 +81,20 @@
           </section>
 
           <aside class="appointments-panel">
+            <section class="notifications-panel">
+              <div class="section-heading compact">
+                <h2>Notifications</h2>
+                <button class="btn btn-outline-secondary btn-sm" type="button" @click="loadNotifications">Refresh</button>
+              </div>
+              <div v-if="notifications.length === 0" class="panel-empty">No notifications yet.</div>
+              <div v-else class="notification-list">
+                <article v-for="notification in notifications.slice(0, 5)" :key="notification.notificationId" class="notification-row">
+                  <div class="notification-message">{{ notification.message }}</div>
+                  <div class="notification-date">{{ formatDateTime(notification.createdAt) }}</div>
+                </article>
+              </div>
+            </section>
+
             <h2>Appointments</h2>
             <div v-if="appointments.length === 0" class="panel-empty">No appointments on this date.</div>
             <div v-else class="appointment-list">
@@ -112,6 +127,8 @@ import {
   getMyClinicAppointments,
   getMyClinicAvailableSlots,
   getMyClinicUnavailableSlots,
+  getMyNotifications,
+  type AppNotification,
   type AppointmentSlot,
   type ClinicAppointment,
   type ClinicUnavailableSlot,
@@ -136,9 +153,11 @@ const selectedDate = ref(toDateKey(new Date()))
 const availableSlots = ref<AppointmentSlot[]>([])
 const unavailableSlots = ref<ClinicUnavailableSlot[]>([])
 const appointments = ref<ClinicAppointment[]>([])
+const notifications = ref<AppNotification[]>([])
 const isLoading = ref(false)
 const accessError = ref('')
 const scheduleError = ref('')
+const notificationsError = ref('')
 
 const todayDate = computed(() => toDateKey(new Date()))
 const canUseDashboard = computed(() => auth.isAuthenticated && auth.user?.userType === 'CLINIC')
@@ -241,6 +260,18 @@ async function loadSchedule() {
   }
 }
 
+async function loadNotifications() {
+  if (!auth.user?.userId || !canUseDashboard.value) return
+
+  try {
+    notificationsError.value = ''
+    notifications.value = await getMyNotifications(auth.user.userId)
+  } catch (error) {
+    notifications.value = []
+    notificationsError.value = error instanceof Error ? error.message : 'Failed to load notifications'
+  }
+}
+
 async function blockSlot(dateTime: string) {
   if (!auth.user?.userId) return
   const reason = window.prompt('Reason for blocking this slot?', 'Not working')
@@ -287,6 +318,15 @@ function toDateKey(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
+function formatDateTime(value: string): string {
+  return new Date(value).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 onMounted(async () => {
   if (!auth.isAuthenticated) {
     router.push('/login')
@@ -306,7 +346,7 @@ onMounted(async () => {
     return
   }
 
-  await loadSchedule()
+  await Promise.all([loadSchedule(), loadNotifications()])
 })
 
 watch(selectedDate, () => {
@@ -437,6 +477,40 @@ watch(selectedDate, () => {
   justify-content: space-between;
   margin-bottom: 18px;
   gap: 16px;
+}
+
+.section-heading.compact {
+  margin-bottom: 12px;
+}
+
+.notifications-panel {
+  border-bottom: 1px solid #e2e8f0;
+  margin-bottom: 20px;
+  padding-bottom: 20px;
+}
+
+.notification-list {
+  display: grid;
+  gap: 10px;
+}
+
+.notification-row {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.notification-message {
+  color: #2d3748;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.notification-date {
+  color: #718096;
+  font-size: 0.82rem;
+  margin-top: 4px;
 }
 
 .section-heading h2,

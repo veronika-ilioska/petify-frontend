@@ -497,6 +497,19 @@
                     </div>
                   </div>
                   <div v-if="appt.notes" class="appointment-notes">{{ appt.notes }}</div>
+                  <div v-if="appointmentError" class="alert alert-danger appointment-inline-error">
+                    {{ appointmentError }}
+                  </div>
+                  <div v-if="canCancelAppointment(appt)" class="appointment-actions">
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-danger"
+                      :disabled="cancellingAppointmentId === appt.appointmentId"
+                      @click="cancelAppointment(appt)"
+                    >
+                      {{ cancellingAppointmentId === appt.appointmentId ? 'Cancelling...' : 'Cancel appointment' }}
+                    </button>
+                  </div>
                   <div v-if="appt.status === 'DONE'" class="clinic-review-section">
                     <div v-if="getClinicReview(appt.clinicId) && activeClinicReviewAppointmentId !== appt.appointmentId" class="clinic-review-summary">
                       <div>
@@ -780,6 +793,7 @@ import {
   getPet,
   loadUserVerificationStatus,
   createAppointment,
+  cancelOwnerAppointment,
   getClinics,
   getClinicAvailableSlots,
   getOwnerAppointments,
@@ -815,6 +829,7 @@ const isLoading = ref(false)
 const isSubmitting = ref(false)
 const isPetSubmitting = ref(false)
 const isAppointmentSubmitting = ref(false)
+const cancellingAppointmentId = ref<number | null>(null)
 const isAppointmentsLoading = ref(false)
 const isSlotsLoading = ref(false)
 const errorMessage = ref('')
@@ -1071,6 +1086,34 @@ const selectedDayAppointments = computed(() => {
 
 function handleCalendarSelect(dateKey: string) {
   selectedAppointmentDate.value = dateKey
+}
+
+function canCancelAppointment(appt: any): boolean {
+  return appt.status === 'CONFIRMED' && new Date(appt.dateTime).getTime() > Date.now()
+}
+
+async function cancelAppointment(appt: any) {
+  if (!auth.user?.userId) {
+    appointmentError.value = 'Please log in to cancel an appointment'
+    return
+  }
+
+  if (!confirm('Cancel this appointment? The clinic will be notified.')) {
+    return
+  }
+
+  try {
+    cancellingAppointmentId.value = appt.appointmentId
+    appointmentError.value = ''
+    const updatedAppointment = await cancelOwnerAppointment(auth.user.userId, appt.appointmentId)
+    appointments.value = appointments.value.map((appointment) =>
+      appointment.appointmentId === updatedAppointment.appointmentId ? updatedAppointment : appointment
+    )
+  } catch (error) {
+    appointmentError.value = error instanceof Error ? error.message : 'Failed to cancel appointment'
+  } finally {
+    cancellingAppointmentId.value = null
+  }
 }
 
 function getClinicReview(clinicId: number): Review | null {
@@ -2119,6 +2162,16 @@ watch([() => newAppointment.value.clinicId, appointmentDate], () => {
   background: #f7fafc;
   padding: 8px 12px;
   border-radius: 8px;
+}
+
+.appointment-inline-error {
+  margin: 4px 0 0;
+}
+
+.appointment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .clinic-review-section {
