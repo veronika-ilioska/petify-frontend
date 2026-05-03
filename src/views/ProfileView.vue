@@ -888,6 +888,7 @@ function getStatusBadgeClass(status: string): string {
       return 'bg-success'
     case 'INACTIVE':
     case 'CANCELLED':
+    case 'CANCELED':
     case 'NO_SHOW':
       return 'bg-secondary'
     case 'SOLD':
@@ -1053,6 +1054,13 @@ async function cancelAppointment(appt: any) {
     appointments.value = appointments.value.map((appointment) =>
       appointment.appointmentId === updatedAppointment.appointmentId ? updatedAppointment : appointment
     )
+    const cancelledDate = String(appt.dateTime || '').slice(0, 10)
+    if (
+      Number(newAppointment.value.clinicId) === Number(appt.clinicId) &&
+      appointmentDate.value === cancelledDate
+    ) {
+      await loadAvailableSlots()
+    }
   } catch (error) {
     appointmentError.value = error instanceof Error ? error.message : 'Failed to cancel appointment'
   } finally {

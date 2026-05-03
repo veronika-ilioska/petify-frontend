@@ -66,7 +66,7 @@
                   type="button"
                   role="tab"
                 >
-                  <i class="bi bi-bookmark-fill"></i> Listings ({{ ownerListings.length }})
+                  <i class="bi bi-bookmark-fill"></i> Active Listings ({{ activeOwnerListings.length }})
                 </button>
               </li>
               <li class="nav-item" role="presentation">
@@ -95,14 +95,14 @@
 
             <!-- Listings Tab -->
             <div v-if="activeTab === 'listings'" class="tab-content-section">
-              <h2 class="section-title">Owner's Listings</h2>
+              <h2 class="section-title">Active Listings</h2>
 
-              <div v-if="ownerListings.length === 0" class="empty-state">
-                <p>This owner hasn't created any listings yet.</p>
+              <div v-if="activeOwnerListings.length === 0" class="empty-state">
+                <p>This owner doesn't have active listings right now.</p>
               </div>
 
               <div v-else class="grid-container">
-                <div v-for="listing in ownerListings" :key="listing.listingId" class="listing-card-wrapper">
+                <div v-for="listing in activeOwnerListings" :key="listing.listingId" class="listing-card-wrapper">
                   <RouterLink :to="`/listing/${listing.listingId}`" class="listing-link">
                     <div class="listing-card">
                       <div class="listing-status" :class="statusClass(listing.status)">
@@ -316,6 +316,10 @@ const petNameMap = computed(() => {
     map[pet.animalId] = pet.name
   })
   return map
+})
+
+const activeOwnerListings = computed(() => {
+  return ownerListings.value.filter((listing) => String(listing.status || 'ACTIVE').toUpperCase() === 'ACTIVE')
 })
 
 // Get pet name for listing

@@ -143,7 +143,6 @@ import {
   deleteMyClinicUnavailableSlot,
   getMyClinic,
   getMyClinicAppointments,
-  getMyClinicAvailableSlots,
   getMyClinicUnavailableSlots,
   getMyNotifications,
   markMyClinicAppointmentNoShow,
@@ -178,12 +177,16 @@ const updatingAppointmentId = ref<number | null>(null)
 const accessError = ref('')
 const scheduleError = ref('')
 const notificationsError = ref('')
+const NON_BLOCKING_STATUSES = new Set(['CANCELLED', 'CANCELED', 'NO_SHOW'])
+let latestScheduleRequest = 0
 
 const canUseDashboard = computed(() => auth.isAuthenticated && auth.user?.userType === 'CLINIC')
 
 const appointmentsByDateTime = computed(() => {
   const map = new Map<string, ClinicAppointment>()
-  appointments.value.forEach((appointment) => map.set(normalizeDateTime(appointment.dateTime), appointment))
+  appointments.value
+    .filter((appointment) => !NON_BLOCKING_STATUSES.has(String(appointment.status || '').toUpperCase()))
+    .forEach((appointment) => map.set(normalizeDateTime(appointment.dateTime), appointment))
   return map
 })
 
@@ -254,28 +257,64 @@ const daySlots = computed<ScheduleSlot[]>(() => {
   return slots
 })
 
+function buildAvailableSlots(
+  date: string,
+  clinicAppointments: ClinicAppointment[],
+  clinicUnavailableSlots: ClinicUnavailableSlot[]
+): AppointmentSlot[] {
+  const now = new Date()
+  const booked = new Set(
+    clinicAppointments
+      .filter((appointment) => !NON_BLOCKING_STATUSES.has(String(appointment.status || '').toUpperCase()))
+      .map((appointment) => normalizeDateTime(appointment.dateTime))
+  )
+  const unavailable = new Set(
+    clinicUnavailableSlots.map((slot) => normalizeDateTime(slot.dateTime))
+  )
+  const slots: AppointmentSlot[] = []
+
+  for (let hour = 9; hour < 17; hour += 1) {
+    for (const minute of [0, 30]) {
+      const dateTime = `${date}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+      const key = normalizeDateTime(dateTime)
+      if (new Date(dateTime).getTime() < now.getTime()) continue
+      if (booked.has(key) || unavailable.has(key)) continue
+      slots.push({
+        dateTime,
+        label: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+      })
+    }
+  }
+
+  return slots
+}
+
 async function loadSchedule() {
   if (!auth.user?.userId || !canUseDashboard.value || !selectedDate.value) return
 
+  const requestId = ++latestScheduleRequest
   try {
     isLoading.value = true
     scheduleError.value = ''
-    const [available, unavailable, clinicAppointments] = await Promise.all([
-      getMyClinicAvailableSlots(auth.user.userId, selectedDate.value),
+    const [unavailable, clinicAppointments] = await Promise.all([
       getMyClinicUnavailableSlots(auth.user.userId, selectedDate.value),
       getMyClinicAppointments(auth.user.userId, selectedDate.value),
     ])
 
-    availableSlots.value = available
+    if (requestId !== latestScheduleRequest) return
     unavailableSlots.value = unavailable
     appointments.value = clinicAppointments
+    availableSlots.value = buildAvailableSlots(selectedDate.value, clinicAppointments, unavailable)
   } catch (error) {
+    if (requestId !== latestScheduleRequest) return
     availableSlots.value = []
     unavailableSlots.value = []
     appointments.value = []
     scheduleError.value = error instanceof Error ? error.message : 'Failed to load clinic schedule'
   } finally {
-    isLoading.value = false
+    if (requestId === latestScheduleRequest) {
+      isLoading.value = false
+    }
   }
 }
 
@@ -344,7 +383,7 @@ async function markNoShow(appointment: ClinicAppointment) {
 
 function getStatusClass(status: string): string {
   if (status === 'CONFIRMED' || status === 'DONE') return 'bg-success'
-  if (status === 'CANCELLED' || status === 'NO_SHOW') return 'bg-secondary'
+  if (status === 'CANCELLED' || status === 'CANCELED' || status === 'NO_SHOW') return 'bg-secondary'
   return 'bg-warning'
 }
 

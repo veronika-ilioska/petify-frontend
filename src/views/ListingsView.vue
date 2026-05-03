@@ -192,6 +192,10 @@ const cityOptions = computed(() => {
 const filteredListings = computed(() => {
   return listings.value
     .filter((l) => {
+      if (!auth.isAuthenticated || !auth.user?.userId) return true
+      return Number(l.ownerId) !== Number(auth.user.userId)
+    })
+    .filter((l) => {
       // Species filter
       if (!petType.value) return true
       const species = getListingSpecies(l)

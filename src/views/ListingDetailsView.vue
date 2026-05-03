@@ -132,8 +132,11 @@
                 <button class="btn-primary" type="button" @click="contactOwner">
                   <span class="btn-text">Contact Owner</span>
                 </button>
+                <button class="btn-secondary" type="button" @click="seeOwner">
+                  <span class="btn-text">See Owner</span>
+                </button>
                 <button class="btn-secondary" type="button" @click="toggleFavorite">
-                  <span class="btn-text">{{ isFavorited ? '♥' : '♡' }}</span>
+                  <span class="btn-text">{{ isFavorited ? 'Saved' : 'Save' }}</span>
                 </button>
               </div>
 
@@ -499,6 +502,14 @@ function contactOwner() {
   window.location.href = `mailto:${ownerEmail.value}?subject=${subject}&body=${body}`
 }
 
+function seeOwner() {
+  if (!listing.value?.ownerId) {
+    alert('Owner information not available')
+    return
+  }
+  router.push({ name: 'owner-profile', params: { ownerId: listing.value.ownerId } })
+}
+
 function copyLink() {
   const url = window.location.href
   navigator.clipboard
@@ -854,14 +865,18 @@ watch(id, () => {
 
 /* Action Buttons */
 .action-buttons {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 12px;
   background: #ffffff;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   box-shadow: 0 14px 34px rgba(17, 24, 39, 0.08);
   padding: 16px;
+}
+
+.action-buttons .btn-secondary:last-child {
+  grid-column: 1 / -1;
 }
 
 .btn-primary,
