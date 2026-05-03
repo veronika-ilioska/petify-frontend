@@ -64,10 +64,18 @@ function normalizeListingRow(row: unknown): Listing | null {
   const price = toNumber(r.price)
   const description = toString(r.description)
   const createdAt = toString(r.created_at) ?? toString(r.createdAt)
+  const animalName = toString(r.animal_name) ?? toString(r.animalName)
+  const ownerName = toString(r.owner_name) ?? toString(r.ownerName)
+  const ownerEmail = toString(r.owner_email) ?? toString(r.ownerEmail)
+  const species = toString(r.species)
+  const breed = toString(r.breed)
+  const city = toString(r.located_name) ?? toString(r.locatedName) ?? toString(r.city)
+  const imageUrl = toString(r.photo_url) ?? toString(r.photoUrl) ?? toString(r.imageUrl)
 
   // If backend doesn't provide a display title, make a reasonable one.
   const title =
     toString(r.title) ??
+    animalName ??
     toString(r.name) ??
     titleFromDescription(description) ??
     (listingId !== undefined ? `Listing #${listingId}` : 'Listing')
@@ -86,6 +94,14 @@ function normalizeListingRow(row: unknown): Listing | null {
     price,
     description,
     createdAt,
+    animalName,
+    ownerName,
+    ownerEmail,
+    species,
+    petType: species,
+    breed,
+    city,
+    imageUrl,
   }
 }
 

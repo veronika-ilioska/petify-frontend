@@ -167,11 +167,8 @@ const breedOptions = computed(() => {
     }
 
     // Get breed from cached pet details
-    if (l.animalId && petDetailsCache.value.has(l.animalId)) {
-      const petDetail = petDetailsCache.value.get(l.animalId)
-      const b = (petDetail?.breed || '').trim()
-      if (b) set.add(b)
-    }
+    const b = String(l.breed || (l.animalId ? petDetailsCache.value.get(l.animalId)?.breed : '') || '').trim()
+    if (b) set.add(b)
   }
   return Array.from(set).sort((a, b) => a.localeCompare(b))
 })
@@ -179,12 +176,8 @@ const breedOptions = computed(() => {
 const cityOptions = computed(() => {
   const set = new Set<string>()
   for (const l of listings.value) {
-    // Get location from cached pet details
-    if (l.animalId && petDetailsCache.value.has(l.animalId)) {
-      const petDetail = petDetailsCache.value.get(l.animalId)
-      const c = (petDetail?.locatedName || '').trim().toLowerCase()
-      if (c) set.add(c)
-    }
+    const c = String(l.city || (l.animalId ? petDetailsCache.value.get(l.animalId)?.locatedName : '') || '').trim().toLowerCase()
+    if (c) set.add(c)
   }
   return Array.from(set).sort((a, b) => a.localeCompare(b))
 })
@@ -206,23 +199,15 @@ const filteredListings = computed(() => {
       // Breed filter - if no breed is selected, show all
       if (!selectedBreed.value || selectedBreed.value === '') return true
 
-      // Get breed from pet details cache
-      if (l.animalId && petDetailsCache.value.has(l.animalId)) {
-        const petDetail = petDetailsCache.value.get(l.animalId)
-        return (petDetail?.breed || '').trim() === selectedBreed.value
-      }
-      return false
+      const breed = String(l.breed || (l.animalId ? petDetailsCache.value.get(l.animalId)?.breed : '') || '').trim()
+      return breed === selectedBreed.value
     })
     .filter((l) => {
       // City filter
       if (!selectedCity.value || selectedCity.value === '') return true
 
-      // Get location from pet details cache and compare in lowercase
-      if (l.animalId && petDetailsCache.value.has(l.animalId)) {
-        const petDetail = petDetailsCache.value.get(l.animalId)
-        return (petDetail?.locatedName || '').trim().toLowerCase() === selectedCity.value.toLowerCase()
-      }
-      return false
+      const city = String(l.city || (l.animalId ? petDetailsCache.value.get(l.animalId)?.locatedName : '') || '').trim().toLowerCase()
+      return city === selectedCity.value.toLowerCase()
     })
     .map((l) => {
       const id = Number((l as any).id || (l as any).listingId)
@@ -262,9 +247,13 @@ async function load() {
       data.map(async (listing) => {
         const result = { ...listing }
 
-        // Fetch pet details
+        // The public listings API is backed by v_listings_enriched, so most card data
+        // arrives already joined from the view. Fetch only when older responses are sparse.
         try {
-          if (listing.animalId) {
+          if (
+            listing.animalId &&
+            (!result.imageUrl || !result.animalName || !result.species || !result.city)
+          ) {
             const pet = await getPet(listing.animalId)
             // Cache pet details for breed options
             petDetailsCache.value.set(listing.animalId, pet)
@@ -274,20 +263,33 @@ async function load() {
             result.petType = pet.species || pet.type
             result.breed = pet.breed || result.breed
             result.city = pet.locatedName || result.city
+          } else if (listing.animalId) {
+            petDetailsCache.value.set(listing.animalId, {
+              name: result.animalName,
+              species: result.species,
+              breed: result.breed,
+              locatedName: result.city,
+              photoUrl: result.imageUrl,
+            })
           }
         } catch (err) {
           console.error(`Failed to fetch pet ${listing.animalId}:`, err)
           result.imageUrl = new URL('../img/all_outline.png', import.meta.url).href
         }
 
-        // Fetch owner details
+        // Fetch owner details only if the enriched view did not provide them.
         try {
-          if (listing.ownerId) {
+          if (listing.ownerId && (!result.ownerName || !result.ownerEmail)) {
             const owner = await getUserProfile(listing.ownerId)
             // Cache owner details
             ownerDetailsCache.value.set(listing.ownerId, owner)
             result.ownerName = `${owner.firstName} ${owner.lastName}` // Add owner name
             result.ownerEmail = owner.email
+          } else if (listing.ownerId) {
+            ownerDetailsCache.value.set(listing.ownerId, {
+              firstName: result.ownerName,
+              email: result.ownerEmail,
+            })
           }
         } catch (err) {
           console.error(`Failed to fetch owner ${listing.ownerId}:`, err)
