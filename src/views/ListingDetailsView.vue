@@ -3,7 +3,7 @@
     <!-- Header with back button -->
     <header class="header-section">
       <div class="container">
-        <RouterLink to="/" class="back-link">← Back to listings</RouterLink>
+        <RouterLink to="/" class="back-link">Back to listings</RouterLink>
       </div>
     </header>
 
@@ -49,6 +49,11 @@
               <!-- Title and price -->
               <div class="header-info">
                 <div>
+                  <p v-if="animalName || ownerName" class="listing-kicker">
+                    <span v-if="animalName">{{ animalName }}</span>
+                    <span v-if="animalName && ownerName"> / </span>
+                    <span v-if="ownerName">Listed by {{ ownerName }}</span>
+                  </p>
                   <h1 class="listing-title">{{ listing.title }}</h1>
                   <p v-if="createdText" class="posted-date">Posted {{ createdText }}</p>
                 </div>
@@ -128,7 +133,7 @@
                   <span class="btn-text">Contact Owner</span>
                 </button>
                 <button class="btn-secondary" type="button" @click="toggleFavorite">
-                  <span class="btn-text">{{ isFavorited ? '♥ Saved' : '♡ Save' }}</span>
+                  <span class="btn-text">{{ isFavorited ? '♥' : '♡' }}</span>
                 </button>
               </div>
 
@@ -139,6 +144,10 @@
                   <div v-if="ownerName" class="info-row">
                     <span class="label">Owner:</span>
                     <span class="value">{{ ownerName }}</span>
+                  </div>
+                  <div v-if="ownerEmail" class="info-row">
+                    <span class="label">Email:</span>
+                    <span class="value">{{ ownerEmail }}</span>
                   </div>
                   <div v-if="animalName" class="info-row">
                     <span class="label">Pet Name:</span>
@@ -151,9 +160,7 @@
               <div class="share-section">
                 <p class="share-title">Share this listing</p>
                 <div class="share-buttons">
-                  <button class="share-btn" type="button" @click="copyLink" :title="copyLinkText">
-                    🔗
-                  </button>
+                  <button class="share-btn" type="button" @click="copyLink" :title="copyLinkText">Copy</button>
                 </div>
               </div>
             </aside>
@@ -190,7 +197,7 @@
                 :aria-pressed="isRelatedFavorited(relatedListing.id)"
                 :title="isRelatedFavorited(relatedListing.id) ? 'Remove from favorites' : 'Add to favorites'"
               >
-                {{ isRelatedFavorited(relatedListing.id) ? '♥' : '♡' }}
+                {{ isRelatedFavorited(relatedListing.id) ?'♥' : '♡' }}
               </button>
               <div v-if="relatedListing.status" class="related-badge">{{ relatedListing.status }}</div>
             </div>
@@ -211,7 +218,7 @@ import { computed, ref, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
 import type { Listing } from '../types/listing'
 import { fetchListingById, fetchUserName, fetchPetName, fetchListings } from '../api/listings'
-import { getPet, getPetHealthRecords, type HealthRecord } from '../api/profile'
+import { getPet, getPetHealthRecords, getUserProfile, type HealthRecord } from '../api/profile'
 import { useAuthStore } from '../stores/auth'
 import { addFavorite, removeFavorite, getFavoritedListings } from '../api/favorites'
 
@@ -224,6 +231,7 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const listing = ref<Listing | null>(null)
 const ownerName = ref<string | null>(null)
+const ownerEmail = ref<string | null>(null)
 const animalName = ref<string | null>(null)
 const isFavorited = ref(false)
 const imageBroken = ref(false)
@@ -307,6 +315,7 @@ async function load() {
   error.value = null
   listing.value = null
   ownerName.value = null
+  ownerEmail.value = null
   animalName.value = null
   isFavorited.value = false
   relatedListings.value = []
@@ -321,13 +330,17 @@ async function load() {
     listing.value = data
 
     // Fetch owner, animal names, and pet image in parallel
-    const [ownerNameResult, animalNameResult, petResult] = await Promise.all([
+    const [ownerNameResult, ownerProfileResult, animalNameResult, petResult] = await Promise.all([
       data.ownerId ? fetchUserName(data.ownerId, { signal: abort.signal }) : Promise.resolve(null),
+      data.ownerId ? getUserProfile(data.ownerId).catch(() => null) : Promise.resolve(null),
       data.animalId ? fetchPetName(data.animalId, { signal: abort.signal }) : Promise.resolve(null),
       data.animalId ? getPet(data.animalId) : Promise.resolve(null),
     ])
 
-    ownerName.value = ownerNameResult
+    ownerName.value = ownerProfileResult
+      ? `${ownerProfileResult.firstName || ''} ${ownerProfileResult.lastName || ''}`.trim() || ownerProfileResult.username || ownerNameResult
+      : ownerNameResult
+    ownerEmail.value = ownerProfileResult?.email || null
     animalName.value = animalNameResult
 
     // Add pet image to listing
@@ -476,11 +489,14 @@ async function toggleFavorite() {
 }
 
 function contactOwner() {
-  if (!listing.value?.ownerId) {
-    alert('Owner information not available')
+  if (!ownerEmail.value) {
+    alert('Owner contact email is not available')
     return
   }
-  router.push({ name: 'owner-profile', params: { ownerId: listing.value.ownerId } })
+  const petName = animalName.value || listing.value?.title || 'your pet'
+  const subject = encodeURIComponent(`Question about ${petName} on Petify`)
+  const body = encodeURIComponent(`Hi ${ownerName.value || ''},\n\nI saw your listing for ${petName} on Petify and would like to know more.\n\nThanks!`)
+  window.location.href = `mailto:${ownerEmail.value}?subject=${subject}&body=${body}`
 }
 
 function copyLink() {
@@ -547,7 +563,7 @@ watch(id, () => {
 
 <style scoped>
 .listing-details-main {
-  background: #f9fafb;
+  background: #f5f7fb;
   min-height: 100vh;
   padding-bottom: 60px;
 }
@@ -579,19 +595,23 @@ watch(id, () => {
 
 /* Image Section */
 .image-section {
-  background: white;
-  padding: 40px 0;
+  background:
+    linear-gradient(135deg, rgba(17, 24, 39, 0.78), rgba(249, 115, 22, 0.56)),
+    #111827;
+  padding: 42px 0;
 }
 
 .image-wrapper {
+  aspect-ratio: 4 / 3;
+  background: #f3f4f6;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(17, 24, 39, 0.34);
+  margin: 0 auto;
+  max-width: 760px;
+  overflow: hidden;
   position: relative;
   width: 100%;
-  max-width: 600px;
-  margin: 0 auto;
-  border-radius: 12px;
-  overflow: hidden;
-  background: #f3f4f6;
-  aspect-ratio: 4 / 3;
 }
 
 .main-image {
@@ -639,7 +659,7 @@ watch(id, () => {
 
 /* Details Section */
 .details-section {
-  padding: 40px 0;
+  padding: 36px 0 20px;
 }
 
 .details-grid {
@@ -652,13 +672,13 @@ watch(id, () => {
 .left-column {
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: 20px;
 }
 
 .right-column {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 16px;
   position: sticky;
   top: 100px;
 }
@@ -672,10 +692,18 @@ watch(id, () => {
 }
 
 .listing-title {
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin: 0 0 12px 0;
   color: #111827;
+  font-size: 2.35rem;
+  font-weight: 850;
+  line-height: 1.12;
+  margin: 0 0 12px 0;
+}
+
+.listing-kicker {
+  color: #ea580c;
+  font-size: 0.85rem;
+  font-weight: 800;
+  margin: 0 0 8px;
 }
 
 .posted-date {
@@ -685,9 +713,13 @@ watch(id, () => {
 }
 
 .price-display {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #d97706;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+  color: #ea580c;
+  font-size: 1.8rem;
+  font-weight: 900;
+  padding: 10px 14px;
   white-space: nowrap;
 }
 
@@ -699,9 +731,10 @@ watch(id, () => {
 .location-card,
 .owner-card {
   background: white;
-  border-radius: 12px;
-  padding: 24px;
   border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 10px 26px rgba(17, 24, 39, 0.04);
+  padding: 24px;
 }
 
 .health-record-list {
@@ -712,6 +745,7 @@ watch(id, () => {
 .health-record-item {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
+  background: #fbfdff;
   padding: 14px;
 }
 
@@ -795,8 +829,9 @@ watch(id, () => {
 }
 
 .trait-item {
-  background: #fef3c7;
-  color: #b45309;
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+  color: #166534;
   padding: 8px 12px;
   border-radius: 6px;
   font-size: 0.875rem;
@@ -822,6 +857,11 @@ watch(id, () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.08);
+  padding: 16px;
 }
 
 .btn-primary,
@@ -837,24 +877,25 @@ watch(id, () => {
 }
 
 .btn-primary {
-  background: #d97706;
+  background: #f97316;
   color: white;
 }
 
 .btn-primary:hover {
-  background: #b45309;
+  background: #ea580c;
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(217, 119, 6, 0.2);
 }
 
 .btn-secondary {
   background: white;
-  color: #d97706;
-  border: 2px solid #d97706;
+  color: #111827;
+  border: 1px solid #d1d5db;
 }
 
 .btn-secondary:hover {
-  background: #fef3c7;
+  background: #f9fafb;
+  border-color: #f97316;
 }
 
 .btn-text {
@@ -896,9 +937,9 @@ watch(id, () => {
 /* Share Section */
 .share-section {
   background: white;
-  border-radius: 12px;
-  padding: 20px;
   border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 18px;
 }
 
 .share-title {
@@ -916,10 +957,12 @@ watch(id, () => {
 .share-btn {
   flex: 1;
   padding: 10px;
-  border: 2px solid #e5e7eb;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: white;
-  font-size: 1.25rem;
+  color: #111827;
+  font-size: 0.92rem;
+  font-weight: 800;
   cursor: pointer;
   transition: all 0.2s ease;
 }

@@ -14,6 +14,7 @@ export interface Listing {
   createdAt?: string
 
   petType?: string
+  species?: string
   breed?: string
   age?: number
   ageUnit?: string
@@ -31,6 +32,7 @@ export interface Listing {
 
   // Owner and animal info
   ownerName?: string
+  ownerEmail?: string
   animalName?: string
 
   // Backwards/alternate fields supported by `ListingCard`
