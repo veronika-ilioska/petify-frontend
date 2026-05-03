@@ -134,6 +134,8 @@ async function loadUsers() {
       .map((user) => ({
         ...user,
         userType: normalizeUserType(user),
+        isBlocked: normalizeBlockedStatus(user),
+        blockedReason: user.blockedReason || '',
       }))
       .filter((user) => ['CLIENT', 'OWNER'].includes(user.userType))
     await loadClientReviewStats()
@@ -146,8 +148,16 @@ function normalizeUserType(user: any) {
   return String(user.userType || 'CLIENT').toUpperCase()
 }
 
+function normalizeBlockedStatus(user: any) {
+  return Boolean(user.isBlocked ?? user.blocked)
+}
+
 async function selectClient(client: any) {
-  selectedClient.value = client
+  selectedClient.value = {
+    ...client,
+    isBlocked: normalizeBlockedStatus(client),
+    blockedReason: client.blockedReason || '',
+  }
   errorMessage.value = ''
   try {
     const [received, left] = await Promise.all([
@@ -193,14 +203,14 @@ async function blockSelectedClient() {
   const reason = window.prompt('Reason for blocking this client?', 'Review policy violation')
   if (reason === null) return
   await blockUser(auth.user.userId, selectedClient.value.userId, true, reason)
-  selectedClient.value = { ...selectedClient.value, isBlocked: true, blockedReason: reason }
+  selectedClient.value = { ...selectedClient.value, isBlocked: true, blocked: true, blockedReason: reason }
   users.value = users.value.map((user) => user.userId === selectedClient.value.userId ? selectedClient.value : user)
 }
 
 async function unblockSelectedClient() {
   if (!auth.user?.userId || !selectedClient.value) return
   await blockUser(auth.user.userId, selectedClient.value.userId, false)
-  selectedClient.value = { ...selectedClient.value, isBlocked: false, blockedReason: '' }
+  selectedClient.value = { ...selectedClient.value, isBlocked: false, blocked: false, blockedReason: '' }
   users.value = users.value.map((user) => user.userId === selectedClient.value.userId ? selectedClient.value : user)
 }
 
