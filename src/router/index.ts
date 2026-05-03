@@ -7,6 +7,7 @@ import ProfileView from '../views/ProfileView.vue'
 import OwnerProfileView from '../views/OwnerProfileView.vue'
 import AdminModerationView from '@/views/AdminModerationView.vue'
 import AdminClientsView from '@/views/AdminClientsView.vue'
+import AdminListingsView from '@/views/AdminListingsView.vue'
 import ClinicDashboardView from '@/views/ClinicDashboardView.vue'
 
 const router = createRouter({
@@ -61,6 +62,11 @@ const router = createRouter({
       path: '/admin/clients',
       name: 'admin-clients',
       component: AdminClientsView,
+    },
+    {
+      path: '/admin/listings',
+      name: 'admin-listings',
+      component: AdminListingsView,
     },
   ],
 })

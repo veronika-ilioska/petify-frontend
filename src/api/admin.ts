@@ -25,8 +25,44 @@ export async function getAllUsers(userId: number): Promise<any[]> {
   return await response.json()
 }
 
-export async function getAllListings(userId: number): Promise<any[]> {
-  const url = joinUrl(getBaseUrl(), '/api/users/admin/listings')
+export interface AdminListingsPage {
+  items: any[]
+  page: number
+  size: number
+  totalItems: number
+  totalPages: number
+  hasNext: boolean
+  hasPrevious: boolean
+  activeListings: number
+  soldListings: number
+}
+
+export interface AdminListingsFilters {
+  status?: string
+  minPrice?: string
+  maxPrice?: string
+}
+
+export async function getAllListings(
+  userId: number,
+  page = 0,
+  size = 500,
+  filters: AdminListingsFilters = {}
+): Promise<AdminListingsPage> {
+  const params = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  })
+  if (filters.status) {
+    params.set('status', filters.status)
+  }
+  if (filters.minPrice) {
+    params.set('minPrice', filters.minPrice)
+  }
+  if (filters.maxPrice) {
+    params.set('maxPrice', filters.maxPrice)
+  }
+  const url = joinUrl(getBaseUrl(), `/api/users/admin/listings?${params.toString()}`)
   const response = await fetch(url, {
     method: 'GET',
     headers: {
@@ -36,7 +72,14 @@ export async function getAllListings(userId: number): Promise<any[]> {
   })
 
   if (!response.ok) {
-    throw new Error('Failed to fetch all listings')
+    const text = await response.text()
+    let apiError = ''
+    try {
+      apiError = JSON.parse(text).error || ''
+    } catch {
+      apiError = ''
+    }
+    throw new Error(apiError || `Failed to fetch listings: ${response.status} ${response.statusText}. ${text.slice(0, 300)}`)
   }
 
   return await response.json()

@@ -16,8 +16,13 @@
           <input v-model="searchQuery" class="form-control search-input" placeholder="Search clients..." />
         </div>
 
+        <div v-if="isClientsLoading" class="alert alert-info">Loading clients and owners...</div>
+
         <div class="client-layout">
           <div class="client-list">
+            <div v-if="!isClientsLoading && filteredClients.length === 0" class="empty-state compact">
+              No clients or owners found.
+            </div>
             <button
               v-for="client in filteredClients"
               :key="client.userId"
@@ -107,18 +112,38 @@ const reviewsBySelected = ref<Review[]>([])
 const clientReviewStats = ref<Record<number, { count: number; average: number }>>({})
 const searchQuery = ref('')
 const errorMessage = ref('')
+const isClientsLoading = ref(false)
 
 const filteredClients = computed(() => {
-  const query = searchQuery.value.toLowerCase()
+  const query = searchQuery.value.trim().toLowerCase()
   return users.value
-    .filter((user) => ['CLIENT', 'OWNER'].includes(user.userType))
-    .filter((user) => `${user.firstName} ${user.lastName} ${user.username} ${user.email}`.toLowerCase().includes(query))
+    .filter((user) => ['CLIENT', 'OWNER'].includes(normalizeUserType(user)))
+    .filter((user) => {
+      if (!query) return true
+      return `${user.firstName || ''} ${user.lastName || ''} ${user.username || ''} ${user.email || ''}`.toLowerCase().includes(query)
+    })
 })
 
 async function loadUsers() {
   if (!auth.user?.userId) return
-  users.value = await getAllUsers(auth.user.userId)
-  await loadClientReviewStats()
+  isClientsLoading.value = true
+  errorMessage.value = ''
+  try {
+    const allUsers = await getAllUsers(auth.user.userId)
+    users.value = allUsers
+      .map((user) => ({
+        ...user,
+        userType: normalizeUserType(user),
+      }))
+      .filter((user) => ['CLIENT', 'OWNER'].includes(user.userType))
+    await loadClientReviewStats()
+  } finally {
+    isClientsLoading.value = false
+  }
+}
+
+function normalizeUserType(user: any) {
+  return String(user.userType || 'CLIENT').toUpperCase()
 }
 
 async function selectClient(client: any) {
@@ -139,7 +164,7 @@ async function selectClient(client: any) {
 }
 
 async function loadClientReviewStats() {
-  const clients = users.value.filter((user) => ['CLIENT', 'OWNER'].includes(user.userType))
+  const clients = users.value.filter((user) => ['CLIENT', 'OWNER'].includes(normalizeUserType(user)))
   const entries = await Promise.all(clients.map(async (client) => {
     try {
       const reviews = await getReviewsByOwner(client.userId)

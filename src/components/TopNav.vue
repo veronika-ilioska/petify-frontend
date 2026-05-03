@@ -35,6 +35,9 @@
                 <RouterLink class="btn btn-admin" to="/admin/clients">
                   <i class="bi bi-people"></i> Clients
                 </RouterLink>
+                <RouterLink class="btn btn-admin" to="/admin/listings">
+                  <i class="bi bi-card-list"></i> Listings
+                </RouterLink>
               </template>
               <RouterLink class="btn btn-outline-secondary" to="/profile">
                 {{ auth.user?.firstName }}'s Profile

@@ -93,17 +93,6 @@
                 <i class="bi bi-calendar-check-fill"></i> Appointments
               </button>
             </li>
-            <li v-if="isAdmin" class="nav-item" role="presentation">
-              <button
-                class="nav-link"
-                :class="{ active: activeTab === 'admin' }"
-                @click="activeTab = 'admin'"
-                type="button"
-                role="tab"
-              >
-                <i class="bi bi-shield-lock-fill"></i> Admin Panel
-              </button>
-            </li>
           </ul>
 
           <!-- Listings Tab -->
@@ -719,109 +708,6 @@
             </div>
           </div>
 
-          <!-- Admin Panel Tab -->
-          <div v-if="activeTab === 'admin' && isAdmin" class="tab-content-section">
-            <h2 class="section-title">Admin Panel</h2>
-            <div class="admin-panel">
-              <div class="admin-section">
-                <h3 class="admin-subtitle">System Statistics</h3>
-                <div class="stats-grid">
-                  <div class="stat-card">
-                    <div class="stat-value">{{ adminStats.totalUsers }}</div>
-                    <div class="stat-label">Total Users</div>
-                  </div>
-                  <div class="stat-card">
-                    <div class="stat-value">{{ adminStats.totalListings }}</div>
-                    <div class="stat-label">Total Listings</div>
-                  </div>
-                  <div class="stat-card">
-                    <div class="stat-value">{{ adminStats.activeListing }}</div>
-                    <div class="stat-label">Active Listings</div>
-                  </div>
-                  <div class="stat-card">
-                    <div class="stat-value">{{ adminStats.soldListings }}</div>
-                    <div class="stat-label">Sold Listings</div>
-                  </div>
-                </div>
-              </div>
-
-              <div class="admin-section">
-                <h3 class="admin-subtitle">Users Management</h3>
-                <div v-if="adminUsers.length === 0" class="empty-state">
-                  <p class="empty-text">No users found</p>
-                </div>
-                <div v-else class="admin-table-container">
-                  <table class="admin-table">
-                    <thead>
-                      <tr>
-                        <th>User ID</th>
-                        <th>Username</th>
-                        <th>Email</th>
-                        <th>Type</th>
-                        <th>Status</th>
-                        <th>Created</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="user in adminUsers" :key="user.userId">
-                        <td>{{ user.userId }}</td>
-                        <td>{{ user.username }}</td>
-                        <td>{{ user.email }}</td>
-                        <td>
-                          <span class="badge" :class="getUserTypeBadgeClass(user.userType || 'CLIENT')">
-                            {{ user.userType || 'CLIENT' }}
-                          </span>
-                        </td>
-                        <td>
-                          <span v-if="!user.isBlocked" class="badge bg-success">Active</span>
-                          <span v-else class="badge bg-danger">Blocked</span>
-                        </td>
-                        <td>{{ formatDate(user.createdAt) }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              <div class="admin-section">
-                <h3 class="admin-subtitle">Listings Management</h3>
-                <div v-if="adminListings.length === 0" class="empty-state">
-                  <p class="empty-text">No listings found</p>
-                </div>
-                <div v-else class="admin-table-container">
-                  <table class="admin-table">
-                    <thead>
-                      <tr>
-                        <th>Listing ID</th>
-                        <th>Owner</th>
-                        <th>Status</th>
-                        <th>Price</th>
-                        <th>Created</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr v-for="listing in adminListings" :key="listing.listingId">
-                        <td>{{ listing.listingId }}</td>
-                        <td>
-                          <div class="owner-info">
-                            <div class="owner-name">{{ listing.ownerName || 'N/A' }}</div>
-                            <div class="owner-username">@{{ listing.ownerUsername || 'unknown' }}</div>
-                          </div>
-                        </td>
-                        <td>
-                          <span class="badge" :class="getStatusBadgeClass(listing.status)">
-                            {{ listing.status }}
-                          </span>
-                        </td>
-                        <td>${{ listing.price?.toFixed(2) || '0.00' }}</td>
-                        <td>{{ formatDate(listing.createdAt) }}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -852,7 +738,6 @@ import {
   type HealthRecord,
 } from '../api/profile'
 import { getFavoritedListings, removeFavorite as removeFavoriteAPI } from '../api/favorites'
-import { getAllUsers, getAllListings } from '../api/admin'
 import {
   createClinicReview,
   deleteReview as deleteReviewAPI,
@@ -864,12 +749,10 @@ import {
 const router = useRouter()
 const auth = useAuthStore()
 
-const activeTab = ref<'listings' | 'pets' | 'create-listing' | 'favorites' | 'admin' | 'appointments'>('listings')
+const activeTab = ref<'listings' | 'pets' | 'create-listing' | 'favorites' | 'appointments'>('listings')
 const listings = ref<any[]>([])
 const pets = ref<any[]>([])
 const favorites = ref<any[]>([])
-const adminUsers = ref<any[]>([])
-const adminListings = ref<any[]>([])
 const clinics = ref<any[]>([])
 const availableSlots = ref<any[]>([])
 const appointments = ref<any[]>([])
@@ -898,13 +781,6 @@ const showAddPetForm = ref(false)
 const addPetPanel = ref<HTMLElement | null>(null)
 const petPhotoFile = ref<File | null>(null)
 const petPhotoPreview = ref('')
-
-const adminStats = ref({
-  totalUsers: 0,
-  totalListings: 0,
-  activeListing: 0,
-  soldListings: 0,
-})
 
 const newListing = ref({
   animalId: null as number | null,
@@ -941,10 +817,6 @@ const healthRecordForm = ref({
 
 const isOwner = computed(() => {
   return auth.user?.userType === 'OWNER'
-})
-
-const isAdmin = computed(() => {
-  return auth.user?.userType === 'ADMIN'
 })
 
 const userType = computed(() => {
@@ -1025,21 +897,11 @@ function getStatusBadgeClass(status: string): string {
   }
 }
 
-function getUserTypeBadgeClass(userType: string): string {
-  switch (userType) {
-    case 'ADMIN':
-      return 'bg-danger'
-    case 'OWNER':
-      return 'bg-primary'
-    case 'CLIENT':
-      return 'bg-info'
-    default:
-      return 'bg-secondary'
-  }
-}
-
 async function loadListings() {
-  if (!auth.user?.userId) return
+  if (!auth.user?.userId || !isOwner.value) {
+    listings.value = []
+    return
+  }
   try {
     isLoading.value = true
     listings.value = await getUserListings(auth.user.userId)
@@ -1610,45 +1472,6 @@ function goToListing(listingId: number) {
   router.push({ name: 'listing-details', params: { id: listingId } })
 }
 
-async function loadAdminData() {
-  if (!isAdmin.value || !auth.user?.userId) return
-
-  try {
-    isLoading.value = true
-    console.log('📊 Loading admin data...')
-
-    // Fetch all users from backend
-    console.log('👥 Fetching all users...')
-    const users = await getAllUsers(auth.user.userId)
-    console.log('📋 Raw users response:', users)
-    adminUsers.value = Array.isArray(users) ? users.map((user: any) => ({
-      ...user,
-      userType: user.userType || 'CLIENT'
-    })) : []
-    console.log(`✅ Loaded ${adminUsers.value.length} users`)
-    console.log('👥 Processed users:', adminUsers.value)
-
-    // Fetch all listings from backend
-    console.log('📋 Fetching all listings...')
-    const allListings = await getAllListings(auth.user.userId)
-    adminListings.value = Array.isArray(allListings) ? allListings : []
-    console.log(`✅ Loaded ${adminListings.value.length} listings`)
-
-    // Calculate statistics from all listings
-    adminStats.value.totalUsers = adminUsers.value.length
-    adminStats.value.totalListings = adminListings.value.length
-    adminStats.value.activeListing = adminListings.value.filter((l: any) => l.status === 'ACTIVE').length
-    adminStats.value.soldListings = adminListings.value.filter((l: any) => l.status === 'SOLD').length
-
-    console.log('✅ Admin data loaded successfully')
-    console.log('📊 Stats:', adminStats.value)
-  } catch (error) {
-    console.error('❌ Failed to load admin data:', error)
-    errorMessage.value = 'Failed to load admin data. Make sure you have admin privileges.'
-  } finally {
-    isLoading.value = false
-  }
-}
 
 async function loadUserVerification() {
   if (!auth.user?.userId) return
@@ -1677,9 +1500,6 @@ onMounted(() => {
   loadClinics()
   loadAppointments()
 
-  if (isAdmin.value) {
-    loadAdminData()
-  }
 })
 
 onBeforeUnmount(() => {
@@ -1688,12 +1508,6 @@ onBeforeUnmount(() => {
   }
 })
 
-// Watch activeTab to load admin data when switching to admin tab
-watch(activeTab, (newTab) => {
-  if (newTab === 'admin' && isAdmin.value) {
-    loadAdminData()
-  }
-})
 
 watch([() => newAppointment.value.clinicId, appointmentDate], () => {
   loadAvailableSlots()
@@ -2544,6 +2358,35 @@ watch([() => newAppointment.value.clinicId, appointmentDate], () => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.admin-section-header,
+.admin-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-section-header {
+  margin-bottom: 16px;
+}
+
+.admin-section-header .admin-subtitle {
+  margin-bottom: 4px;
+}
+
+.admin-page-meta {
+  color: #718096;
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.admin-pagination {
+  border-top: 1px solid #e2e8f0;
+  color: #4a5568;
+  margin-top: 16px;
+  padding-top: 16px;
 }
 
 .stats-grid {

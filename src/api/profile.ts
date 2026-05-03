@@ -145,7 +145,14 @@ export async function getUserListings(userId: number): Promise<any[]> {
   })
 
   if (!response.ok) {
-    throw new Error(`Failed to fetch listings: ${response.statusText}`)
+    const text = await response.text()
+    let apiError = ''
+    try {
+      apiError = JSON.parse(text).error || ''
+    } catch {
+      apiError = ''
+    }
+    throw new Error(apiError || `Failed to fetch listings: ${response.status} ${response.statusText}`)
   }
 
   return await response.json()
